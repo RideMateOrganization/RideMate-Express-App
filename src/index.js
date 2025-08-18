@@ -1,39 +1,62 @@
-const express = require("express");
-const dotenv = require("dotenv");
-const cors = require("cors");
-const morgan = require("morgan");
+const express = require('express');
+const dotenv = require('dotenv');
+const cors = require('cors');
+const morgan = require('morgan');
 
-const connectDB = require("./config/db");
+const { connectDB, disconnectDB } = require('./config/db');
 
-dotenv.config({ path: "./.env" });
-const env = process.env.NODE_ENV || "development";
+dotenv.config({ path: './.env', quiet: true });
+const env = process.env.NODE_ENV || 'development';
 const PORT = process.env.PORT || 5000;
 
 connectDB();
 const app = express();
 
-if (env === "development") {
-  app.use(morgan("dev"));
+if (env === 'development') {
+  app.use(morgan('dev'));
 }
 app.use(cors());
 app.use(express.json());
 
-const v1Routes = require("./routes/v1");
+const v1Routes = require('./routes/v1');
 
-app.use("/api/v1", v1Routes);
-app.get("/", (req, res) => {
-  res.send("Roadmate API is running...");
+app.use('/api/v1', v1Routes);
+app.get('/', (req, res) => {
+  res.send('Roadmate API is running...');
 });
-app.use((req, res, next) => {
+app.use((req, res) => {
   res.status(404).json({
     success: false,
-    error: "Not found",
+    error: 'Not found',
   });
 });
 
-app.listen(PORT, console.info(`Server running in ${env} mode on port ${PORT}`));
+const server = app.listen(
+  PORT,
+  console.info(`Server running in ${env} mode on port ${PORT}`),
+);
 
-process.on("unhandledRejection", (err, promise) => {
+process.on('unhandledRejection', async (err) => {
   console.log(`Error: ${err.message}`);
+  await disconnectDB();
   server.close(() => process.exit(1));
+});
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('Received SIGINT. Performing graceful shutdown...');
+  await disconnectDB();
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGTERM', async () => {
+  console.log('Received SIGTERM. Performing graceful shutdown...');
+  await disconnectDB();
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });

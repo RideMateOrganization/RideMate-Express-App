@@ -1,8 +1,8 @@
-const jwt = require("jsonwebtoken");
+const jwt = require('jsonwebtoken');
 
 // @desc Send token response
 // @route Private - Only for logged in users
-function sendTokenResponse(user, statusCode, res) {
+function sendTokenResponse (user, statusCode, res) {
   const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE,
   });

@@ -1,10 +1,27 @@
-const User = require("../models/user");
+const User = require('../models/user');
+const { sendTokenResponse } = require('../utils/auth');
 
 // @desc Register a new user
 // @route POST /api/v1/auth/register
 // @access Public
 async function register(req, res) {
   try {
+    const { name, email, password, handle } = req.body;
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      return res.status(400).json({
+        success: false,
+        error: 'User already exists',
+      });
+    }
+
+    const user = await User.create({
+      name,
+      email,
+      password,
+      handle,
+    });
+    sendTokenResponse(user, 201, res);
   } catch (error) {
     if (error.code === 11000) {
       const field = Object.keys(error.keyValue)[0];
@@ -16,7 +33,7 @@ async function register(req, res) {
     console.error(error);
     res.status(500).json({
       success: false,
-      error: "Error registering user",
+      error: error.message,
     });
   }
 }
@@ -30,22 +47,22 @@ async function login(req, res) {
     if (!email || !password) {
       return res.status(400).json({
         success: false,
-        error: "Please provide an email and password",
+        error: 'Please provide an email and password',
       });
     }
 
-    const user = await User.findOne({ email }).select("+password");
+    const user = await User.findOne({ email }).select('+password');
     if (!user) {
       return res.status(401).json({
         success: false,
-        error: "Invalid credentials",
+        error: 'Invalid credentials',
       });
     }
     const isMatch = await user.matchPassword(password);
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        error: "Invalid credentials",
+        error: 'Invalid credentials',
       });
     }
     sendTokenResponse(user, 200, res);
@@ -53,9 +70,9 @@ async function login(req, res) {
     console.error(error);
     res.status(500).json({
       success: false,
-      error: "Error logging in",
+      error: 'Error logging in',
     });
   }
 }
 
-module.exports = { register };
+module.exports = { register, login };
