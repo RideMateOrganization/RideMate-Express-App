@@ -26,9 +26,10 @@ export default defineConfig([
       ecmaVersion: 12,
       sourceType: 'commonjs',
     },
-
+    ignores: ['eslint.config.mjs', 'node_modules', '.git'],
     rules: {
       'consistent-return': 'off',
+      'no-underscore-dangle': ['error', { allow: ['_id'] }],
     },
   },
 ]);

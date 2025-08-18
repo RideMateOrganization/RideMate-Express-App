@@ -1,3 +1,5 @@
+const mongoose = require('mongoose');
+
 let isConnected = false;
 
 // @desc Connect to MongoDB with connection pooling
