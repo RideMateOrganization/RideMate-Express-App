@@ -29,7 +29,6 @@ export default defineConfig([
     ignores: ['eslint.config.mjs', 'node_modules', '.git'],
     rules: {
       'consistent-return': 'off',
-      'no-underscore-dangle': ['error', { allow: ['_id'] }],
     },
   },
 ]);
