@@ -3,7 +3,7 @@ const {
   sendOTP,
   verifyOTP: verifyOTPWithTwilio,
 } = require('../utils/twilioVerify');
-const { sendTokenResponse } = require('../utils/auth');
+const { sendTokenResponse, addToBlacklist } = require('../utils/auth');
 
 // @desc Register a new user
 // @route POST /api/v1/auth/register
@@ -175,4 +175,27 @@ async function verifyOTP(req, res) {
   }
 }
 
-module.exports = { register, login, requestOTP, verifyOTP };
+// @desc Logout user / Revoke token
+// @route POST /api/v1/auth/logout
+// @access Private
+async function logout(req, res) {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (token) {
+      await addToBlacklist(token, req.user.id);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Logged out successfully',
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: 'Error logging out',
+    });
+  }
+}
+
+module.exports = { register, login, requestOTP, verifyOTP, logout };

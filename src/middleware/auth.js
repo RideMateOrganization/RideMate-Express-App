@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/user');
+const { isTokenBlacklisted } = require('../utils/auth');
 
 // @desc Protect routes
 // @route Private - Only for logged in users
@@ -15,6 +16,14 @@ async function protect(req, res, next) {
 
   if (!token) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  // Check if token is blacklisted
+  const isBlacklisted = await isTokenBlacklisted(token);
+  if (isBlacklisted) {
+    return res
+      .status(401)
+      .json({ success: false, message: 'Token has been revoked' });
   }
 
   try {
