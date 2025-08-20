@@ -5,13 +5,14 @@ const userSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: [true, 'Please provide a name'],
+      // required: [true, 'Please provide a name'],
       trim: true,
     },
     email: {
       type: String,
-      required: [true, 'Please provide an email'],
+      // required: [true, 'Please provide an email'],
       unique: true,
+      sparse: true,
       match: [
         /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/,
         'Please add a valid email',
@@ -19,13 +20,13 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: [true, 'Please provide a password'],
+      // required: [true, 'Please provide a password'],
       minlength: [6, 'Password must be at least 6 characters long'],
       select: false,
     },
     handle: {
       type: String,
-      required: [true, 'Please provide a handle'],
+      // required: [true, 'Please provide a handle'],
       unique: true,
       trim: true,
       match: [
@@ -53,17 +54,24 @@ const userSchema = new mongoose.Schema(
     phone: {
       type: String,
       trim: true,
+      unique: true,
+      required: [true, 'Please provide the phone number'],
       match: [/^(\+\d{1,3}[- ]?)?\d{10}$/, 'Please add a valid phone number'],
       default: '',
     },
     phoneCountryCode: {
       type: String,
       trim: true,
+      required: [true, 'Please provide the phone country code'],
       match: [
         /^\+\d{1,4}$/,
         "Phone country code must start with '+' followed by 1 to 4 digits.",
       ],
       default: '',
+    },
+    isPhoneVerified: {
+      type: Boolean,
+      default: false,
     },
   },
   {

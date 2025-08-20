@@ -1,4 +1,8 @@
 const User = require('../models/user');
+const {
+  sendOTP,
+  verifyOTP: verifyOTPWithTwilio,
+} = require('../utils/twilioVerify');
 const { sendTokenResponse } = require('../utils/auth');
 
 // @desc Register a new user
@@ -75,4 +79,99 @@ async function login(req, res) {
   }
 }
 
-module.exports = { register, login };
+// @desc Request OTP for phone number
+// @route POST /api/v1/auth/request-otp
+// @access Public
+async function requestOTP(req, res) {
+  try {
+    const { phone, countryCode } = req.body;
+    if (!phone || !countryCode) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide a phone number and country code',
+      });
+    }
+
+    const fullPhoneNumber = `${countryCode}${phone}`;
+    let user = await User.findOne({ phone, phoneCountryCode: countryCode });
+
+    if (!user) {
+      user = await User.create({
+        name: 'New Rider',
+        handle: `@rider_${Math.random().toString(36).substring(2, 9)}`,
+        phone: fullPhoneNumber,
+        phoneCountryCode: countryCode,
+        isPhoneVerified: false,
+      });
+      console.log('New user created:', user);
+    }
+
+    const twilioResponse = await sendOTP(fullPhoneNumber);
+    if (twilioResponse.status === 'pending') {
+      res.status(200).json({
+        success: true,
+        message: 'OTP sent successfully',
+      });
+    } else {
+      console.error('Twilio OTP request non-pending status:', twilioResponse);
+      res.status(500).json({
+        success: false,
+        error: `Failed to send OTP. Twilio status: ${twilioResponse.status}`,
+      });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+}
+
+// @desc Verify OTP for phone number
+// @route POST /api/v1/auth/verify-otp
+// @access Public
+async function verifyOTP(req, res) {
+  try {
+    const { phone, countryCode, otp } = req.body;
+    if (!phone || !countryCode || !otp) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide a phone number, country code, and OTP',
+      });
+    }
+
+    const fullPhoneNumber = `${countryCode}${phone}`;
+    const twilioResponse = await verifyOTPWithTwilio(fullPhoneNumber, otp);
+
+    if (twilioResponse.status === 'approved') {
+      const user = await User.findOne({ phone, phoneCountryCode: countryCode });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: 'User not found',
+        });
+      }
+
+      if (!user.isPhoneVerified) {
+        user.isPhoneVerified = true;
+        await user.save({ validateBeforeSave: true });
+        sendTokenResponse(user, 200, res);
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid OTP, please try again',
+        });
+      }
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+}
+
+module.exports = { register, login, requestOTP, verifyOTP };
