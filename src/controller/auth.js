@@ -154,16 +154,17 @@ async function verifyOTP(req, res) {
         });
       }
 
+      // if user is not verified, verify them
       if (!user.isPhoneVerified) {
         user.isPhoneVerified = true;
         await user.save({ validateBeforeSave: true });
-        sendTokenResponse(user, 200, res);
-      } else {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid OTP, please try again',
-        });
       }
+      sendTokenResponse(user, 200, res);
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid OTP, please try again',
+      });
     }
   } catch (error) {
     console.error(error);
