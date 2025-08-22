@@ -4,7 +4,9 @@ const { getUser, getUserById } = require('../../controller/user');
 
 const router = express.Router();
 
-router.get('/me', protect, getUser);
-router.get('/:id', protect, getUserById);
+router.use(protect);
+
+router.route('/me').get(getUser);
+router.route('/:id').get(getUserById);
 
 module.exports = router;
