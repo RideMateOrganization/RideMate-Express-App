@@ -138,18 +138,59 @@ async function createRide(req, res) {
 
 // @desc    Get all rides (e.g., for discovery)
 // @route   GET /api/v1/rides
-// @access  Public
+// @access  Private
+// @query   {string} owner - Filter rides by owner ID
+// @query   {string} startTime - Sort rides: 'asc' (default) or 'desc' by startTime
+// @query   {number} page - Page number for pagination (default: 1)
+// @query   {number} limit - Number of rides per page (default: 10, max: 50)
 async function getRides(req, res) {
   try {
-    const rides = await Ride.find()
+    const { owner, startTime, page = 1, limit = 10 } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 10));
+    const skip = (pageNum - 1) * limitNum;
+
+    const filterObj = {};
+    if (owner && req.user) {
+      filterObj.owner = req.user.id;
+    }
+
+    let sortObj = { startTime: 1 };
+    if (startTime === 'desc') {
+      sortObj = { startTime: -1 };
+    } else if (startTime === 'asc') {
+      sortObj = { startTime: 1 };
+    }
+
+    const totalRides = await Ride.countDocuments(filterObj);
+    const totalPages = Math.ceil(totalRides / limitNum);
+
+    const rides = await Ride.find(filterObj)
       .populate('owner', 'name handle profileImage')
       .populate('participants.user', 'name handle profileImage')
-      .sort({ startTime: 1 });
+      .sort(sortObj)
+      .skip(skip)
+      .limit(limitNum);
 
     res.status(200).json({
       success: true,
       count: rides.length,
+      total: totalRides,
       data: rides,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1,
+        nextPage: pageNum < totalPages ? pageNum + 1 : null,
+        prevPage: pageNum > 1 ? pageNum - 1 : null,
+        limit: limitNum,
+      },
+      filters: {
+        owner: owner || 'all',
+        startTime: startTime || 'asc',
+      },
     });
   } catch (err) {
     console.error('Error getting rides:', err);
