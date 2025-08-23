@@ -2,6 +2,7 @@ const { Types } = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 const { RideVisibility } = require('../utils/constants');
 const Ride = require('../models/ride');
+const RideRequest = require('../models/ride-requests');
 
 // Create a new ride
 // @route POST /api/rides
@@ -167,8 +168,8 @@ async function getRides(req, res) {
     const totalPages = Math.ceil(totalRides / limitNum);
 
     const rides = await Ride.find(filterObj)
-      .populate('owner', 'name handle profileImage')
-      .populate('participants.user', 'name handle profileImage')
+      .populate('owner', 'name handle profileImage email')
+      .populate('participants.user', 'name handle profileImage email')
       .sort(sortObj)
       .skip(skip)
       .limit(limitNum);
@@ -205,9 +206,12 @@ async function getRides(req, res) {
 // @access  Public
 async function getRide(req, res) {
   try {
+    const { includeRequests } = req.query;
+    const userId = req.user?.id; // Optional user ID for additional context
+
     const ride = await Ride.findById(req.params.id)
-      .populate('owner', 'name handle profileImage')
-      .populate('participants.user', 'name handle profileImage');
+      .populate('owner', 'name handle profileImage email')
+      .populate('participants.user', 'name handle profileImage email');
 
     if (!ride) {
       return res.status(404).json({
@@ -216,9 +220,51 @@ async function getRide(req, res) {
       });
     }
 
+    // Organize participants by status for better structure
+    const organizedParticipants = {
+      owner: ride.participants.find((p) => p.role === 'owner'),
+      approved: ride.participants.filter(
+        (p) => p.isApproved && p.role !== 'owner',
+      ),
+      pending: ride.participants.filter(
+        (p) => !p.isApproved && p.role !== 'owner',
+      ),
+      total: ride.participants.length,
+      maxParticipants: ride.maxParticipants,
+      availableSpots: ride.maxParticipants
+        ? ride.maxParticipants -
+          ride.participants.filter((p) => p.isApproved).length
+        : null,
+    };
+
+    // Prepare response data
+    const responseData = {
+      ...ride.toObject(),
+      participants: organizedParticipants,
+    };
+
+    // Include pending requests if requested and user is owner
+    if (
+      includeRequests === 'true' &&
+      userId &&
+      ride.owner.id.toString() === userId.toString()
+    ) {
+      const pendingRequests = await RideRequest.find({
+        ride: ride.id,
+        status: 'pending',
+      }).populate('requester', 'name handle profileImage email');
+
+      responseData.pendingRequests = pendingRequests.map((request) => ({
+        requestId: request.id,
+        requester: request.requester,
+        message: request.message,
+        requestedAt: request.requestedAt,
+      }));
+    }
+
     res.status(200).json({
       success: true,
-      data: ride,
+      data: responseData,
     });
   } catch (err) {
     console.error('Error getting single ride:', err);
@@ -238,14 +284,9 @@ async function getRide(req, res) {
 // @access  Private
 async function joinRide(req, res) {
   try {
-    if (!req.user) {
-      return res
-        .status(401)
-        .json({ success: false, error: 'Not authorized, no user found' });
-    }
-
     const { rideId } = req.params;
     const userId = req.user.id;
+    const { message } = req.body;
 
     const ride = await Ride.findOne({ rideId: rideId.toUpperCase() });
 
@@ -255,6 +296,7 @@ async function joinRide(req, res) {
         .json({ success: false, error: `Ride not found with ID ${rideId}` });
     }
 
+    // Check if user is already a participant
     const isAlreadyParticipant = ride.participants.some(
       (p) => p.user.toString() === userId.toString(),
     );
@@ -266,44 +308,67 @@ async function joinRide(req, res) {
       });
     }
 
-    if (
-      ride.maxParticipants &&
-      ride.participants.length >= ride.maxParticipants
-    ) {
+    // Check if there's already a pending request
+    const existingRequest = await RideRequest.findOne({
+      ride: ride.id,
+      requester: userId,
+      status: 'pending',
+    });
+
+    if (existingRequest) {
       return res.status(400).json({
         success: false,
-        error: 'This ride has reached its maximum number of participants.',
+        error: 'You already have a pending request for this ride.',
       });
     }
 
-    let isApproved = false;
     if (ride.visibility === RideVisibility.Public) {
-      isApproved = true;
-    } else {
-      isApproved = false;
-    }
+      // For public rides, add directly as participant
+      if (
+        ride.maxParticipants &&
+        ride.participants.length >= ride.maxParticipants
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: 'This ride has reached its maximum number of participants.',
+        });
+      }
 
-    ride.participants.push({
-      user: new Types.ObjectId(userId),
-      joinedAt: new Date(),
-      role: 'member',
-      isApproved,
-    });
+      ride.participants.push({
+        user: new Types.ObjectId(userId),
+        joinedAt: new Date(),
+        role: 'member',
+        isApproved: true,
+      });
 
-    await ride.save();
+      await ride.save();
 
-    if (isApproved) {
       res.status(200).json({
         success: true,
         message: 'Successfully joined the ride!',
         data: ride,
       });
     } else {
+      // For private rides, create a join request
+      const newRequest = new RideRequest({
+        ride: ride.id,
+        requester: userId,
+        message: message || '',
+        status: 'pending',
+      });
+
+      await newRequest.save();
+
       res.status(200).json({
-        success: false,
+        success: true,
         message:
           'Your request to join this private ride has been sent to the owner for approval.',
-        data: ride,
+        data: {
+          requestId: newRequest.id,
+          status: 'pending',
+          rideId: ride.rideId,
+          rideName: ride.name,
+        },
       });
     }
   } catch (err) {
@@ -313,6 +378,12 @@ async function joinRide(req, res) {
       return res
         .status(400)
         .json({ success: false, error: messages.join(', ') });
+    }
+    if (err.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        error: 'You already have a pending request for this ride.',
+      });
     }
     res
       .status(500)
@@ -325,12 +396,6 @@ async function joinRide(req, res) {
 // @access  Private
 async function leaveRide(req, res) {
   try {
-    if (!req.user) {
-      return res
-        .status(401)
-        .json({ success: false, error: 'Not authorized, no user found' });
-    }
-
     const { rideId } = req.params;
     const userId = req.user.id;
 
@@ -377,10 +442,274 @@ async function leaveRide(req, res) {
   }
 }
 
+// @desc    Get pending join requests for rides owned by the user
+// @route   GET /api/v1/rides/requests/pending
+// @access  Private
+async function getPendingRequests(req, res) {
+  try {
+    const userId = req.user.id;
+
+    // Find all rides owned by the user
+    const userRides = await Ride.find({ owner: userId }).select(
+      '_id name rideId startTime',
+    );
+    const rideIds = userRides.map((ride) => ride.id);
+
+    // Find all pending requests for these rides
+    const pendingRequests = await RideRequest.find({
+      ride: { $in: rideIds },
+      status: 'pending',
+    })
+      .populate('ride', 'name rideId startTime')
+      .populate('requester', 'name handle profileImage email')
+      .sort({ requestedAt: -1 });
+
+    // Group requests by ride
+    const requestsByRide = pendingRequests.reduce((acc, request) => {
+      const { rideId } = request.ride;
+      if (!acc[rideId]) {
+        acc[rideId] = {
+          rideId: request.ride.rideId,
+          rideName: request.ride.name,
+          startTime: request.ride.startTime,
+          pendingRequests: [],
+        };
+      }
+      acc[rideId].pendingRequests.push({
+        requestId: request.id,
+        requester: request.requester,
+        message: request.message,
+        requestedAt: request.requestedAt,
+      });
+      return acc;
+    }, {});
+
+    const result = Object.values(requestsByRide);
+
+    res.status(200).json({
+      success: true,
+      count: result.length,
+      data: result,
+    });
+  } catch (err) {
+    console.error('Error getting pending requests:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Server Error getting pending requests.',
+    });
+  }
+}
+
+// @desc    Approve or reject a join request
+// @route   POST /api/v1/rides/requests/:requestId
+// @access  Private
+async function approveRejectRequest(req, res) {
+  try {
+    const { requestId } = req.params;
+    const { action, responseMessage } = req.body;
+    const ownerId = req.user.id;
+
+    if (!action || !['approve', 'reject'].includes(action)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Action must be either "approve" or "reject"',
+      });
+    }
+
+    // Find the request and populate ride details
+    const request = await RideRequest.findById(requestId)
+      .populate('ride')
+      .populate('requester', 'name handle profileImage');
+
+    if (!request) {
+      return res
+        .status(404)
+        .json({ success: false, error: 'Request not found' });
+    }
+
+    // Verify the user owns the ride
+    if (request.ride.owner.toString() !== ownerId.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'Only the ride owner can approve/reject requests',
+      });
+    }
+
+    if (request.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        error: 'This request has already been processed',
+      });
+    }
+
+    // Update request status
+    request.status = action === 'approve' ? 'approved' : 'rejected';
+    request.respondedAt = new Date();
+    request.respondedBy = ownerId;
+    request.responseMessage = responseMessage || '';
+
+    await request.save();
+
+    if (action === 'approve') {
+      // Check if ride has reached max participants
+      const approvedParticipants = await RideRequest.countDocuments({
+        ride: request.ride.id,
+        status: 'approved',
+      });
+
+      if (
+        request.ride.maxParticipants &&
+        approvedParticipants >= request.ride.maxParticipants
+      ) {
+        // Revert the approval if max participants reached
+        request.status = 'pending';
+        request.respondedAt = undefined;
+        request.respondedBy = undefined;
+        request.responseMessage = undefined;
+        await request.save();
+
+        return res.status(400).json({
+          success: false,
+          error:
+            'Cannot approve request: ride has reached maximum participants',
+        });
+      }
+
+      // Add user to ride participants
+      const ride = await Ride.findById(request.ride.id);
+      ride.participants.push({
+        user: request.requester.id,
+        joinedAt: new Date(),
+        role: 'member',
+        isApproved: true,
+      });
+
+      await ride.save();
+
+      res.status(200).json({
+        success: true,
+        message: 'Join request approved successfully',
+        data: {
+          request,
+          ride,
+        },
+      });
+    } else {
+      res.status(200).json({
+        success: true,
+        message: 'Join request rejected',
+        data: request,
+      });
+    }
+  } catch (err) {
+    console.error('Error approving/rejecting request:', err);
+    res
+      .status(500)
+      .json({ success: false, error: 'Server Error processing request.' });
+  }
+}
+
+// @desc    Get user's ride requests
+// @route   GET /api/v1/rides/requests/my-requests
+// @access  Private
+async function getMyRequests(req, res) {
+  try {
+    const userId = req.user.id;
+    const requests = await RideRequest.find({ requester: userId })
+      .populate('ride', 'name rideId startTime owner')
+      .populate('ride.owner', 'name handle')
+      .sort({ requestedAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: requests.length,
+      data: requests,
+    });
+  } catch (err) {
+    console.error('Error getting user requests:', err);
+    res
+      .status(500)
+      .json({ success: false, error: 'Server Error getting user requests.' });
+  }
+}
+
+// @desc    Get all participants for a specific ride (including pending requests)
+// @route   GET /api/v1/rides/:rideId/participants
+// @access  Private
+async function getRideParticipants(req, res) {
+  try {
+    const { rideId } = req.params;
+    const userId = req.user.id;
+
+    const ride = await Ride.findOne({ rideId: rideId.toUpperCase() })
+      .populate('participants.user', 'name handle profileImage email')
+      .select('name rideId owner participants maxParticipants');
+
+    if (!ride) {
+      return res
+        .status(404)
+        .json({ success: false, error: `Ride not found with ID ${rideId}` });
+    }
+
+    // Check if user is owner or approved participant
+    const isOwner = ride.owner.toString() === userId.toString();
+    const isApprovedParticipant = ride.participants.some(
+      (p) => p.user.toString() === userId.toString() && p.isApproved,
+    );
+
+    if (!isOwner && !isApprovedParticipant) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied: not owner or approved participant',
+      });
+    }
+
+    // Organize participants by status
+    const participants = {
+      owner: ride.participants.find((p) => p.role === 'owner'),
+      approved: ride.participants.filter(
+        (p) => p.isApproved && p.role !== 'owner',
+      ),
+      pending: ride.participants.filter(
+        (p) => !p.isApproved && p.role !== 'owner',
+      ),
+      total: ride.participants.length,
+      maxParticipants: ride.maxParticipants,
+      availableSpots: ride.maxParticipants
+        ? ride.maxParticipants -
+          ride.participants.filter((p) => p.isApproved).length
+        : null,
+    };
+
+    res.status(200).json({
+      success: true,
+      data: {
+        rideId: ride.rideId,
+        rideName: ride.name,
+        participants,
+      },
+    });
+  } catch (err) {
+    console.error('Error getting ride participants:', err);
+    if (err.name === 'CastError') {
+      return res
+        .status(400)
+        .json({ success: false, error: 'Invalid ride ID format.' });
+    }
+    res
+      .status(500)
+      .json({ success: false, error: 'Server Error getting participants.' });
+  }
+}
+
 module.exports = {
   createRide,
   getRides,
   getRide,
   joinRide,
   leaveRide,
+  getPendingRequests,
+  approveRejectRequest,
+  getMyRequests,
+  getRideParticipants,
 };
