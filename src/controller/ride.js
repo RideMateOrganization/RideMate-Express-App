@@ -174,11 +174,32 @@ async function getRides(req, res) {
       .skip(skip)
       .limit(limitNum);
 
+    // Organize participants for each ride to match getRide structure
+    const ridesWithOrganizedParticipants = rides.map((ride) => {
+      const rideObj = ride.toObject();
+      rideObj.participants = {
+        owner: rideObj.participants.find((p) => p.role === 'owner'),
+        approved: rideObj.participants.filter(
+          (p) => p.isApproved && p.role !== 'owner',
+        ),
+        pending: rideObj.participants.filter(
+          (p) => !p.isApproved && p.role !== 'owner',
+        ),
+        total: rideObj.participants.length,
+        maxParticipants: rideObj.maxParticipants,
+        availableSpots: rideObj.maxParticipants
+          ? rideObj.maxParticipants -
+            rideObj.participants.filter((p) => p.isApproved).length
+          : null,
+      };
+      return rideObj;
+    });
+
     res.status(200).json({
       success: true,
-      count: rides.length,
+      count: ridesWithOrganizedParticipants.length,
       total: totalRides,
-      data: rides,
+      data: ridesWithOrganizedParticipants,
       pagination: {
         currentPage: pageNum,
         totalPages,
@@ -286,7 +307,7 @@ async function joinRide(req, res) {
   try {
     const { rideId } = req.params;
     const userId = req.user.id;
-    const { message } = req.body;
+    const message = req.body?.message ?? '';
 
     const ride = await Ride.findOne({ rideId: rideId.toUpperCase() });
 

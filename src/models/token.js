@@ -22,7 +22,6 @@ const TokenSchema = new mongoose.Schema(
     expiresAt: {
       type: Date,
       required: [true, 'Token expiration is required'],
-      index: true,
     },
   },
   {
@@ -30,9 +29,7 @@ const TokenSchema = new mongoose.Schema(
   },
 );
 
-// Create TTL index to automatically delete expired tokens
 TokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-// Create compound index for better query performance
 TokenSchema.index({ token: 1, expiresAt: 1 });
 
 module.exports = mongoose.model('Tokens', TokenSchema);
