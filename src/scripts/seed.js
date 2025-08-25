@@ -215,7 +215,7 @@ function generateDate(startDate, endDate) {
 }
 
 // Generate random participants for a ride
-function generateParticipants(ownerId, allUsers, maxParticipants) {
+function generateParticipants(ownerId) {
   const participants = [
     {
       user: ownerId,
@@ -225,39 +225,12 @@ function generateParticipants(ownerId, allUsers, maxParticipants) {
     },
   ];
 
-  // Add other participants (excluding owner)
-  const otherUsers = allUsers.filter(
-    (user) => user.id.toString() !== ownerId.toString(),
-  );
-  if (otherUsers.length === 0) return participants;
-
-  // Determine how many additional participants to add
-  const maxAdditionalParticipants = Math.min(
-    maxParticipants - 1, // -1 for owner
-    otherUsers.length,
-    Math.floor(Math.random() * 4) + 1, // 1-4 additional participants
-  );
-
-  // Randomly select users to be participants
-  const selectedUsers = otherUsers
-    .sort(() => 0.5 - Math.random())
-    .slice(0, maxAdditionalParticipants);
-
-  selectedUsers.forEach((user) => {
-    const isApproved = Math.random() > 0.3; // 70% approved, 30% pending
-    participants.push({
-      user: user.id,
-      joinedAt: new Date(),
-      role: 'member',
-      isApproved,
-    });
-  });
-
+  // Only add the owner as participant - no additional participants
   return participants;
 }
 
 // Generate random ride data for a user
-function generateRideData(ownerId, allUsers) {
+function generateRideData(ownerId) {
   // Generate rides across different time periods: next week, next month, next 3 months
   const timeRanges = [
     { min: 1, max: 7 }, // Next week
@@ -315,14 +288,7 @@ function generateRideData(ownerId, allUsers) {
       const max = Math.floor(Math.random() * 8) + 2; // 2-10 participants
       return max;
     })(),
-    participants: generateParticipants(
-      ownerId,
-      allUsers,
-      (() => {
-        const max = Math.floor(Math.random() * 8) + 2; // 2-10 participants
-        return max;
-      })(),
-    ),
+    participants: generateParticipants(ownerId),
     visibility:
       Object.values(RideVisibility)[
         Math.floor(Math.random() * Object.values(RideVisibility).length)
@@ -340,19 +306,23 @@ function generateRideData(ownerId, allUsers) {
 }
 
 // Generate random ride request data
-function generateRideRequestData(rideId, requesterId, ownerId) {
+function generateRideRequestData(rideId, userId, ownerId, forcedStatus = null) {
   // Weighted distribution: mostly pending, some approved, fewer rejected
-  const rand = Math.random();
   let status;
-  if (rand < 0.5)
-    status = 'pending'; // 50% pending
-  else if (rand < 0.8)
-    status = 'approved'; // 30% approved
-  else status = 'rejected'; // 20% rejected
+  if (forcedStatus) {
+    status = forcedStatus;
+  } else {
+    const rand = Math.random();
+    if (rand < 0.5)
+      status = 'pending'; // 50% pending
+    else if (rand < 0.8)
+      status = 'approved'; // 30% approved
+    else status = 'rejected'; // 20% rejected
+  }
 
   const data = {
     ride: rideId,
-    requester: requesterId,
+    user: userId,
     status,
     message:
       Math.random() > 0.4
@@ -446,7 +416,7 @@ async function seedDatabase() {
     users.forEach((user) => {
       const numRides = Math.floor(Math.random() * 5) + 3; // 3-7 rides per user
       for (let i = 0; i < numRides; i += 1) {
-        const rideData = generateRideData(user.id, users);
+        const rideData = generateRideData(user.id);
         rides.push(rideData);
       }
     });
@@ -473,12 +443,26 @@ async function seedDatabase() {
           .sort(() => 0.5 - Math.random())
           .slice(0, Math.min(numRequests, potentialRequesters.length));
 
-        selectedRequesters.forEach((requester) => {
-          const requestData = generateRideRequestData(
-            ride.id,
-            requester.id,
-            ride.owner,
-          );
+        // Ensure at least one pending request is created
+        let hasPendingRequest = false;
+
+        selectedRequesters.forEach((user, index) => {
+          // Force the first request to be pending if we haven't created one yet
+          let requestData;
+          if (index === 0 && !hasPendingRequest) {
+            requestData = generateRideRequestData(
+              ride.id,
+              user.id,
+              ride.owner,
+              'pending', // Force pending status
+            );
+            hasPendingRequest = true;
+          } else {
+            requestData = generateRideRequestData(ride.id, user.id, ride.owner);
+            if (requestData.status === 'pending') {
+              hasPendingRequest = true;
+            }
+          }
           rideRequests.push(requestData);
         });
       }

@@ -179,20 +179,20 @@ async function getRides(req, res) {
     // Organize participants for each ride to match getRide structure
     const ridesWithOrganizedParticipants = rides.map((ride) => {
       const rideObj = ride.toObject();
+      const approvedCount = rideObj.participants.filter(
+        (p) => p.isApproved,
+      ).length;
+      const pendingCount = rideObj.participants.filter(
+        (p) => !p.isApproved,
+      ).length;
+
       rideObj.participants = {
-        owner: rideObj.participants.find((p) => p.role === 'owner'),
-        approved: rideObj.participants.filter(
-          (p) => p.isApproved && p.role !== 'owner',
-        ),
-        pending: rideObj.participants.filter(
-          (p) => !p.isApproved && p.role !== 'owner',
-        ),
-        total: rideObj.participants.length,
-        maxParticipants: rideObj.maxParticipants,
-        availableSpots: rideObj.maxParticipants
-          ? rideObj.maxParticipants -
-            rideObj.participants.filter((p) => p.isApproved).length
-          : null,
+        approved: approvedCount,
+        pending: pendingCount,
+        total: rideObj.maxParticipants || 0,
+        available: rideObj.maxParticipants
+          ? rideObj.maxParticipants - approvedCount
+          : 0,
       };
       return rideObj;
     });
@@ -229,9 +229,6 @@ async function getRides(req, res) {
 // @access  Public
 async function getRide(req, res) {
   try {
-    const { includeRequests } = req.query;
-    const userId = req.user?.id; // Optional user ID for additional context
-
     const ride = await Ride.findById(req.params.id)
       .populate('owner', 'name handle profileImage email')
       .populate('participants.user', 'name handle profileImage email');
@@ -243,21 +240,16 @@ async function getRide(req, res) {
       });
     }
 
-    // Organize participants by status for better structure
+    const approvedCount = ride.participants.filter((p) => p.isApproved).length;
+    const pendingCount = ride.participants.filter((p) => !p.isApproved).length;
+
     const organizedParticipants = {
-      owner: ride.participants.find((p) => p.role === 'owner'),
-      approved: ride.participants.filter(
-        (p) => p.isApproved && p.role !== 'owner',
-      ),
-      pending: ride.participants.filter(
-        (p) => !p.isApproved && p.role !== 'owner',
-      ),
-      total: ride.participants.length,
-      maxParticipants: ride.maxParticipants,
-      availableSpots: ride.maxParticipants
-        ? ride.maxParticipants -
-          ride.participants.filter((p) => p.isApproved).length
-        : null,
+      approved: approvedCount,
+      pending: pendingCount,
+      total: ride.maxParticipants || 0,
+      available: ride.maxParticipants
+        ? ride.maxParticipants - approvedCount
+        : 0,
     };
 
     // Prepare response data
@@ -265,25 +257,6 @@ async function getRide(req, res) {
       ...ride.toObject(),
       participants: organizedParticipants,
     };
-
-    // Include pending requests if requested and user is owner
-    if (
-      includeRequests === 'true' &&
-      userId &&
-      ride.owner.id.toString() === userId.toString()
-    ) {
-      const pendingRequests = await RideRequest.find({
-        ride: ride.id,
-        status: 'pending',
-      }).populate('requester', 'name handle profileImage email');
-
-      responseData.pendingRequests = pendingRequests.map((request) => ({
-        requestId: request.id,
-        requester: request.requester,
-        message: request.message,
-        requestedAt: request.requestedAt,
-      }));
-    }
 
     res.status(200).json({
       success: true,
@@ -307,16 +280,16 @@ async function getRide(req, res) {
 // @access  Private
 async function joinRide(req, res) {
   try {
-    const { rideId } = req.params;
+    const { id } = req.params;
     const userId = req.user.id;
     const message = req.body?.message ?? '';
 
-    const ride = await Ride.findOne({ rideId: rideId.toUpperCase() });
+    const ride = await Ride.findById(id);
 
     if (!ride) {
       return res
         .status(404)
-        .json({ success: false, error: `Ride not found with ID ${rideId}` });
+        .json({ success: false, error: `Ride not found with ID ${id}` });
     }
 
     // Check if user is already a participant
@@ -334,7 +307,7 @@ async function joinRide(req, res) {
     // Check if there's already a pending request
     const existingRequest = await RideRequest.findOne({
       ride: ride.id,
-      requester: userId,
+      user: userId,
       status: 'pending',
     });
 
@@ -346,7 +319,6 @@ async function joinRide(req, res) {
     }
 
     if (ride.visibility === RideVisibility.Public) {
-      // For public rides, add directly as participant
       if (
         ride.maxParticipants &&
         ride.participants.length >= ride.maxParticipants
@@ -375,7 +347,7 @@ async function joinRide(req, res) {
       // For private rides, create a join request
       const newRequest = new RideRequest({
         ride: ride.id,
-        requester: userId,
+        user: userId,
         message: message || '',
         status: 'pending',
       });
@@ -419,15 +391,15 @@ async function joinRide(req, res) {
 // @access  Private
 async function leaveRide(req, res) {
   try {
-    const { rideId } = req.params;
+    const { id } = req.params;
     const userId = req.user.id;
 
-    const ride = await Ride.findOne({ rideId: rideId.toUpperCase() });
+    const ride = await Ride.findById(id);
 
     if (!ride) {
       return res
         .status(404)
-        .json({ success: false, error: `Ride not found with ID ${rideId}` });
+        .json({ success: false, error: `Ride not found with ID ${id}` });
     }
 
     const participantIndex = ride.participants.findIndex(
@@ -484,7 +456,7 @@ async function getPendingRequests(req, res) {
       status: 'pending',
     })
       .populate('ride', 'name rideId startTime')
-      .populate('requester', 'name handle profileImage email')
+      .populate('user', 'name handle profileImage email')
       .sort({ requestedAt: -1 });
 
     // Group requests by ride
@@ -500,7 +472,7 @@ async function getPendingRequests(req, res) {
       }
       acc[rideId].pendingRequests.push({
         requestId: request.id,
-        requester: request.requester,
+        user: request.user,
         message: request.message,
         requestedAt: request.requestedAt,
       });
@@ -542,7 +514,7 @@ async function approveRejectRequest(req, res) {
     // Find the request and populate ride details
     const request = await RideRequest.findById(requestId)
       .populate('ride')
-      .populate('requester', 'name handle profileImage');
+      .populate('user', 'name handle profileImage');
 
     if (!request) {
       return res
@@ -601,7 +573,7 @@ async function approveRejectRequest(req, res) {
       // Add user to ride participants
       const ride = await Ride.findById(request.ride.id);
       ride.participants.push({
-        user: request.requester.id,
+        user: request.user.id,
         joinedAt: new Date(),
         role: 'member',
         isApproved: true,
@@ -638,7 +610,7 @@ async function approveRejectRequest(req, res) {
 async function getMyRequests(req, res) {
   try {
     const userId = req.user.id;
-    const requests = await RideRequest.find({ requester: userId })
+    const requests = await RideRequest.find({ user: userId })
       .populate('ride', 'name rideId startTime owner')
       .populate('ride.owner', 'name handle')
       .sort({ requestedAt: -1 });
@@ -661,17 +633,17 @@ async function getMyRequests(req, res) {
 // @access  Private
 async function getRideParticipants(req, res) {
   try {
-    const { rideId } = req.params;
+    const { id } = req.params;
     const userId = req.user.id;
 
-    const ride = await Ride.findOne({ rideId: rideId.toUpperCase() })
-      .populate('participants.user', 'name handle profileImage email')
+    const ride = await Ride.findById(id)
+      .populate('participants.user')
       .select('name rideId owner participants maxParticipants');
 
     if (!ride) {
       return res
         .status(404)
-        .json({ success: false, error: `Ride not found with ID ${rideId}` });
+        .json({ success: false, error: `Ride not found with ID ${id}` });
     }
 
     // Check if user is owner or approved participant
@@ -687,15 +659,17 @@ async function getRideParticipants(req, res) {
       });
     }
 
+    // Get pending requests from RideRequest model
+    const pendingRequests = await RideRequest.find({
+      ride: id,
+      status: 'pending',
+    }).populate('user');
+
     // Organize participants by status
     const participants = {
       owner: ride.participants.find((p) => p.role === 'owner'),
-      approved: ride.participants.filter(
-        (p) => p.isApproved && p.role !== 'owner',
-      ),
-      pending: ride.participants.filter(
-        (p) => !p.isApproved && p.role !== 'owner',
-      ),
+      approved: ride.participants.filter((p) => p.isApproved),
+      pending: pendingRequests,
       total: ride.participants.length,
       maxParticipants: ride.maxParticipants,
       availableSpots: ride.maxParticipants

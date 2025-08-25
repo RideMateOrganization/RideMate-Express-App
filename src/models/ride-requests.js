@@ -8,10 +8,10 @@ const RideRequestSchema = new mongoose.Schema(
       required: [true, 'Ride ID is required'],
       index: true,
     },
-    requester: {
+    user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Requester ID is required'],
+      required: [true, 'User ID is required'],
       index: true,
     },
     status: {
@@ -25,11 +25,6 @@ const RideRequestSchema = new mongoose.Schema(
       type: String,
       maxlength: [200, 'Message cannot exceed 200 characters'],
       trim: true,
-    },
-    requestedAt: {
-      type: Date,
-      default: Date.now,
-      required: true,
     },
     respondedAt: {
       type: Date,
@@ -47,8 +42,8 @@ const RideRequestSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-RideRequestSchema.index({ ride: 1, requester: 1, status: 1 }, { unique: true });
+RideRequestSchema.index({ ride: 1, user: 1, status: 1 }, { unique: true });
 RideRequestSchema.index({ ride: 1, status: 'pending' });
-RideRequestSchema.index({ requester: 1, status: 1 });
+RideRequestSchema.index({ user: 1, status: 1 });
 
 module.exports = mongoose.model('RideRequest', RideRequestSchema);

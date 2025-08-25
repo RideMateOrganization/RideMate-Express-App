@@ -15,8 +15,8 @@ router.use(protect);
 
 router.route('/').get(getRides).post(createRide);
 router.route('/:id').get(getRide);
-router.post('/join/:rideId', joinRide);
-router.post('/leave/:rideId', leaveRide);
-router.get('/:rideId/participants', getRideParticipants);
+router.post('/join/:id', joinRide);
+router.post('/leave/:id', leaveRide);
+router.get('/:id/participants', getRideParticipants);
 
 module.exports = router;
