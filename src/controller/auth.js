@@ -2,7 +2,7 @@ const User = require('../models/user');
 const {
   sendOTP,
   verifyOTP: verifyOTPWithTwilio,
-} = require('../utils/twilioVerify');
+} = require('../utils/twilio-verify');
 const { sendTokenResponse, addToBlacklist } = require('../utils/auth');
 
 // @desc Register a new user
