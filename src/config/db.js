@@ -1,13 +1,13 @@
 const mongoose = require('mongoose');
 
-let isConnected = false;
+let cachedDb = null;
 
 // @desc Connect to MongoDB with connection pooling
 // @route Public - Anyone can connect to the database
 async function connectDB() {
-  if (isConnected) {
+  if (cachedDb) {
     console.log('Using existing database connection');
-    return;
+    return cachedDb;
   }
 
   try {
@@ -18,7 +18,7 @@ async function connectDB() {
       bufferCommands: false,
     });
 
-    isConnected = true;
+    cachedDb = conn;
     console.log(`MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
     console.error(`Error: ${error.message}`);
@@ -28,13 +28,13 @@ async function connectDB() {
 
 // @desc Disconnect from MongoDB
 async function disconnectDB() {
-  if (!isConnected) {
+  if (!cachedDb) {
     return;
   }
 
   try {
     await mongoose.disconnect();
-    isConnected = false;
+    cachedDb = null;
     console.log('MongoDB Disconnected');
   } catch (error) {
     console.error(`Error disconnecting: ${error.message}`);

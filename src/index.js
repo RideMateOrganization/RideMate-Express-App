@@ -4,13 +4,12 @@ const cors = require('cors');
 const morgan = require('morgan');
 const compression = require('compression');
 
-const { connectDB } = require('./config/db');
+const connectToDatabase = require('./middleware/connect-db');
 
 dotenv.config({ path: './.env', quiet: true });
 const env = process.env.NODE_ENV || 'development';
 const PORT = process.env.PORT || 5000;
 
-connectDB();
 const app = express();
 
 app.use(compression());
@@ -19,6 +18,7 @@ if (env === 'development') {
 }
 app.use(cors());
 app.use(express.json());
+app.use(connectToDatabase);
 
 const v1Routes = require('./routes/v1');
 
