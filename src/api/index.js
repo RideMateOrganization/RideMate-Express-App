@@ -4,7 +4,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const compression = require('compression');
 
-const { connectDB, disconnectDB } = require('./config/db');
+const { connectDB, disconnectDB } = require('../config/db');
 
 dotenv.config({ path: './.env', quiet: true });
 const env = process.env.NODE_ENV || 'development';
@@ -20,11 +20,11 @@ if (env === 'development') {
 app.use(cors());
 app.use(express.json());
 
-const v1Routes = require('./routes/v1');
+const v1Routes = require('../routes/v1');
 
 app.use('/api/v1', v1Routes);
 app.get('/', (req, res) => {
-  res.send('Roadmate API is running...');
+  res.send('Ridemate API is running...');
 });
 app.use((req, res) => {
   res.status(404).json({
