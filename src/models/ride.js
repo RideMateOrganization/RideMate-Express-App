@@ -124,6 +124,11 @@ const RideSchema = new mongoose.Schema(
       enum: ['planned', 'active', 'completed', 'cancelled'],
       default: 'planned',
     },
+    difficulty: {
+      type: String,
+      enum: ['easy', 'moderate', 'hard', 'extreme'],
+      default: 'easy',
+    },
     rideId: {
       type: String,
       required: [true, 'A unique ride ID is required'],

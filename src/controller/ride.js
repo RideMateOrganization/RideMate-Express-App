@@ -19,6 +19,7 @@ async function createRide(req, res) {
       maxParticipants,
       visibility,
       route,
+      difficulty,
     } = req.body;
 
     if (
@@ -110,6 +111,7 @@ async function createRide(req, res) {
         : undefined,
       route,
       maxParticipants,
+      difficulty: difficulty || 'easy',
       visibility: visibility || RideVisibility.Public,
       status: 'planned',
     });
