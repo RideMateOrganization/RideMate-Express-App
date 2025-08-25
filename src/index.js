@@ -2,6 +2,7 @@ const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const morgan = require('morgan');
+const compression = require('compression');
 
 const { connectDB, disconnectDB } = require('./config/db');
 
@@ -12,6 +13,7 @@ const PORT = process.env.PORT || 5000;
 connectDB();
 const app = express();
 
+app.use(compression());
 if (env === 'development') {
   app.use(morgan('dev'));
 }
