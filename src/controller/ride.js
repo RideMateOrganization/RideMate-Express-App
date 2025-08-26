@@ -1,8 +1,12 @@
 const { Types } = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
-const { RideVisibility } = require('../utils/constants');
+
 const Ride = require('../models/ride');
 const RideRequest = require('../models/ride-requests');
+const UserDevice = require('../models/user-device');
+
+const { RideVisibility } = require('../utils/constants');
+const { sendPushNotification } = require('../utils/expo-push-manager');
 
 // Create a new ride
 // @route POST /api/rides
@@ -353,6 +357,29 @@ async function joinRide(req, res) {
       });
 
       await newRequest.save();
+
+      // Send push notification to the ride owner
+      const rideOwner = ride.owner;
+      const userDevice = await UserDevice.findOne({
+        user: rideOwner,
+        isActive: true,
+      }).sort({ lastSeen: -1 });
+
+      if (userDevice) {
+        await sendPushNotification(
+          userDevice.pushToken,
+          'Ride Request',
+          `You have a new ride request from ${req.user.name}`,
+          message,
+          {
+            notificationType: 'NOTIFICATION__USER_RIDE_JOIN_REQUEST',
+            rideId: ride.rideId,
+            rideName: ride.name,
+            requesterName: req.user.name,
+            requesterId: req.user.id,
+          },
+        );
+      }
 
       res.status(200).json({
         success: true,
