@@ -631,27 +631,139 @@ async function approveRejectRequest(req, res) {
   }
 }
 
-// @desc    Get user's ride requests
+// @desc    Get user's ride requests categorized by status
 // @route   GET /api/v1/rides/requests/my-requests
 // @access  Private
 async function getMyRequests(req, res) {
   try {
     const userId = req.user.id;
     const requests = await RideRequest.find({ user: userId })
-      .populate('ride', 'name rideId startTime owner')
-      .populate('ride.owner', 'name handle')
-      .sort({ requestedAt: -1 });
+      .populate({
+        path: 'ride',
+        populate: {
+          path: 'owner',
+          select: 'name handle profileImage email phoneCountryCode phone',
+        },
+      })
+      .sort({ createdAt: -1 });
+    console.log(requests);
+
+    // Categorize requests by status
+    const categorizedRequests = {
+      pending: [],
+      accepted: [],
+      closed: [],
+    };
+
+    requests.forEach((request) => {
+      const requestData = {
+        id: request.id,
+        ride: request.ride,
+        message: request.message,
+        createdAt: request.createdAt,
+        respondedAt: request.respondedAt,
+        responseMessage: request.responseMessage,
+        respondedBy: request.respondedBy,
+      };
+
+      if (request.status === 'pending') {
+        categorizedRequests.pending.push(requestData);
+      } else if (request.status === 'approved') {
+        categorizedRequests.accepted.push(requestData);
+      } else if (request.status === 'rejected') {
+        categorizedRequests.closed.push(requestData);
+      }
+    });
 
     res.status(200).json({
       success: true,
       count: requests.length,
-      data: requests,
+      data: categorizedRequests,
     });
   } catch (err) {
     console.error('Error getting user requests:', err);
     res
       .status(500)
       .json({ success: false, error: 'Server Error getting user requests.' });
+  }
+}
+
+// @desc    Delete a ride request
+// @route   DELETE /api/v1/ride-requests/:requestId
+// @access  Private
+async function deleteRideRequest(req, res) {
+  try {
+    const { requestId } = req.params;
+    const userId = req.user.id;
+
+    // Find the request
+    const request = await RideRequest.findById(requestId)
+      .populate('ride', 'name rideId owner')
+      .populate('user', 'name handle');
+
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        error: 'Ride request not found',
+      });
+    }
+
+    // Check if user is the one who made the request or the ride owner
+    const isRequestOwner = request.user.id.toString() === userId.toString();
+    const isRideOwner = request.ride.owner.toString() === userId.toString();
+
+    if (!isRequestOwner && !isRideOwner) {
+      return res.status(403).json({
+        success: false,
+        error:
+          'You can only delete your own requests or requests for rides you own',
+      });
+    }
+
+    // If request is approved and user is trying to delete it, check if they're still in the ride
+    if (request.status === 'approved') {
+      const ride = await Ride.findById(request.ride.id);
+      const isStillParticipant = ride.participants.some(
+        (p) => p.user.toString() === request.user.id.toString(),
+      );
+
+      if (isStillParticipant) {
+        return res.status(400).json({
+          success: false,
+          error:
+            'Cannot delete approved request while still participating in the ride',
+        });
+      }
+    }
+
+    // Delete the request
+    await RideRequest.findByIdAndDelete(requestId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Ride request deleted successfully',
+      data: {
+        deletedRequest: {
+          id: request.id,
+          ride: request.ride,
+          user: request.user,
+          status: request.status,
+          message: request.message,
+        },
+      },
+    });
+  } catch (err) {
+    console.error('Error deleting ride request:', err);
+    if (err.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request ID format',
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: 'Server Error deleting ride request',
+    });
   }
 }
 
@@ -736,4 +848,5 @@ module.exports = {
   approveRejectRequest,
   getMyRequests,
   getRideParticipants,
+  deleteRideRequest,
 };

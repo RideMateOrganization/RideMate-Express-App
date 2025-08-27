@@ -11,9 +11,11 @@ const router = express.Router();
 
 router.use(protect);
 
-router.route('/').post(registerDevice);
-router.route('/').get(getUserDevices);
-router.route('/').delete(deactivateAllDevices);
+router
+  .route('/')
+  .get(getUserDevices)
+  .post(registerDevice)
+  .delete(deactivateAllDevices);
 router.route('/:pushToken').delete(deactivateDevice);
 
 module.exports = router;
