@@ -150,9 +150,10 @@ async function createRide(req, res) {
 // @query   {string} startTime - Sort rides: 'asc' (default) or 'desc' by startTime
 // @query   {number} page - Page number for pagination (default: 1)
 // @query   {number} limit - Number of rides per page (default: 10, max: 50)
+// @query   {boolean} participant - Filter rides where user is owner or participant
 async function getRides(req, res) {
   try {
-    const { owner, startTime, page = 1, limit = 10 } = req.query;
+    const { owner, startTime, page = 1, limit = 10, participant } = req.query;
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 10));
@@ -161,6 +162,23 @@ async function getRides(req, res) {
     const filterObj = {};
     if (owner && req.user) {
       filterObj.owner = req.user.id;
+    }
+
+    // Add participant filter
+    if (participant && req.user) {
+      if (participant === 'true') {
+        // Return rides where user is owner OR participant
+        filterObj.$or = [
+          { owner: req.user.id },
+          { 'participants.user': req.user.id },
+        ];
+      } else if (participant === 'false') {
+        // Return rides where user is NOT the owner AND NOT in participants list
+        filterObj.$and = [
+          { owner: { $ne: req.user.id } },
+          { 'participants.user': { $ne: req.user.id } },
+        ];
+      }
     }
 
     let sortObj = { startTime: 1 };
@@ -218,6 +236,7 @@ async function getRides(req, res) {
       filters: {
         owner: owner || 'all',
         startTime: startTime || 'asc',
+        participant: participant || 'false',
       },
     });
   } catch (err) {
@@ -373,7 +392,7 @@ async function joinRide(req, res) {
           message,
           {
             notificationType: 'NOTIFICATION__USER_RIDE_JOIN_REQUEST',
-            rideId: ride.rideId,
+            rideId: ride.id,
             rideName: ride.name,
             requesterName: req.user.name,
             requesterId: req.user.id,
