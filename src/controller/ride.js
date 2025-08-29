@@ -857,6 +857,104 @@ async function getRideParticipants(req, res) {
   }
 }
 
+// @desc    Remove a participant from a ride (owner only)
+// @route   DELETE /api/v1/rides/:rideId/participants/:participantId
+// @access  Private
+async function removeParticipant(req, res) {
+  try {
+    const { id: rideId, participantId } = req.params;
+    const ownerId = req.user.id;
+
+    const ride = await Ride.findById(rideId);
+
+    if (!ride) {
+      return res
+        .status(404)
+        .json({ success: false, error: `Ride not found with ID ${rideId}` });
+    }
+
+    // Check if the user is the owner of the ride
+    if (ride.owner.toString() !== ownerId.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'Only the ride owner can remove participants',
+      });
+    }
+
+    // Find the participant to remove
+    const participantIndex = ride.participants.findIndex(
+      (p) => p.user.toString() === participantId.toString(),
+    );
+
+    if (participantIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        error: 'Participant not found in this ride',
+      });
+    }
+
+    const participant = ride.participants[participantIndex];
+
+    // Prevent removing the owner
+    if (participant.role === 'owner') {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot remove the ride owner',
+      });
+    }
+
+    // Remove the participant
+    const removedParticipant = ride.participants.splice(participantIndex, 1)[0];
+    await ride.save();
+
+    // Send push notification to the removed participant
+    const userDevice = await UserDevice.findOne({
+      user: participantId,
+      isActive: true,
+    }).sort({ lastSeen: -1 });
+
+    if (userDevice) {
+      await sendPushNotification(
+        userDevice.pushToken,
+        'Removed from Ride',
+        `You have been removed from the ride "${ride.name}"`,
+        `The ride owner has removed you from the ride scheduled for ${new Date(ride.startTime).toLocaleDateString()}`,
+        {
+          notificationType: 'NOTIFICATION__USER_REMOVED_FROM_RIDE',
+          rideId: ride.id,
+          rideName: ride.name,
+          ownerName: req.user.name,
+        },
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Participant removed successfully',
+      data: {
+        removedParticipant,
+        ride: {
+          id: ride.id,
+          name: ride.name,
+          participantsCount: ride.participants.length,
+        },
+      },
+    });
+  } catch (err) {
+    console.error('Error removing participant:', err);
+    if (err.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid ride ID or participant ID format',
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: 'Server Error removing participant',
+    });
+  }
+}
+
 module.exports = {
   createRide,
   getRides,
@@ -868,4 +966,5 @@ module.exports = {
   getMyRequests,
   getRideParticipants,
   deleteRideRequest,
+  removeParticipant,
 };

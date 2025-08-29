@@ -7,6 +7,7 @@ const {
   joinRide,
   leaveRide,
   getRideParticipants,
+  removeParticipant,
 } = require('../../controller/ride');
 
 const router = express.Router();
@@ -18,5 +19,6 @@ router.route('/:id').get(getRide);
 router.post('/join/:id', joinRide);
 router.post('/leave/:id', leaveRide);
 router.get('/:id/participants', getRideParticipants);
+router.delete('/:id/participants/:participantId', removeParticipant);
 
 module.exports = router;
