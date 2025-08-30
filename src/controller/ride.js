@@ -160,20 +160,21 @@ async function getRides(req, res) {
     const skip = (pageNum - 1) * limitNum;
 
     const filterObj = {};
-    if (owner && req.user) {
-      filterObj.owner = req.user.id;
-    }
 
-    // Add participant filter
-    if (participant && req.user) {
-      if (participant === 'true') {
-        // Return rides where user is owner OR participant
+    if (req.user) {
+      if (owner === 'true') {
+        filterObj.owner = req.user.id;
+      } else if (owner === 'false' && participant === 'true') {
+        filterObj.$and = [
+          { owner: { $ne: req.user.id } },
+          { 'participants.user': req.user.id },
+        ];
+      } else if (participant === 'true') {
         filterObj.$or = [
           { owner: req.user.id },
           { 'participants.user': req.user.id },
         ];
       } else if (participant === 'false') {
-        // Return rides where user is NOT the owner AND NOT in participants list
         filterObj.$and = [
           { owner: { $ne: req.user.id } },
           { 'participants.user': { $ne: req.user.id } },
@@ -807,7 +808,7 @@ async function getRideParticipants(req, res) {
     // Check if user is owner or approved participant
     const isOwner = ride.owner.toString() === userId.toString();
     const isApprovedParticipant = ride.participants.some(
-      (p) => p.user.toString() === userId.toString() && p.isApproved,
+      (p) => p.user.id === userId && p.isApproved,
     );
 
     if (!isOwner && !isApprovedParticipant) {
