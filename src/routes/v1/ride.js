@@ -8,12 +8,14 @@ const {
   leaveRide,
   getRideParticipants,
   removeParticipant,
+  getNearbyRides,
 } = require('../../controller/ride');
 
 const router = express.Router();
 
 router.use(protect);
 
+router.get('/nearby', getNearbyRides);
 router.route('/').get(getRides).post(createRide);
 router.route('/:id').get(getRide);
 router.post('/join/:id', joinRide);

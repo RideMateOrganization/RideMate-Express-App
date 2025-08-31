@@ -31,6 +31,8 @@ async function createRide(req, res) {
       !startTime ||
       !startLocation ||
       !startLocation.coordinates ||
+      !startLocation.coordinates.latitude ||
+      !startLocation.coordinates.longitude ||
       !startLocation.address ||
       !startLocation.address.city ||
       !startLocation.address.country
@@ -38,17 +40,17 @@ async function createRide(req, res) {
       return res.status(400).json({
         success: false,
         error:
-          'Please provide ride name, start time, start location coordinates, city, and country.',
+          'Please provide ride name, start time, start location coordinates (latitude and longitude), city, and country.',
       });
     }
     if (
-      !Array.isArray(startLocation.coordinates) ||
-      startLocation.coordinates.length !== 2
+      typeof startLocation.coordinates.latitude !== 'number' ||
+      typeof startLocation.coordinates.longitude !== 'number'
     ) {
       return res.status(400).json({
         success: false,
         error:
-          'Start location coordinates must be an array of [longitude, latitude].',
+          'Start location coordinates must be valid numbers for latitude and longitude.',
       });
     }
 
@@ -56,13 +58,15 @@ async function createRide(req, res) {
     if (endLocation) {
       if (
         !endLocation.coordinates ||
-        !Array.isArray(endLocation.coordinates) ||
-        endLocation.coordinates.length !== 2
+        !endLocation.coordinates.latitude ||
+        !endLocation.coordinates.longitude ||
+        typeof endLocation.coordinates.latitude !== 'number' ||
+        typeof endLocation.coordinates.longitude !== 'number'
       ) {
         return res.status(400).json({
           success: false,
           error:
-            'End location coordinates must be an array of [longitude, latitude] if endLocation is provided.',
+            'End location coordinates must include valid latitude and longitude numbers if endLocation is provided.',
         });
       }
       if (
@@ -87,7 +91,10 @@ async function createRide(req, res) {
       endTime: endTime ? new Date(endTime) : undefined,
       startLocation: {
         type: 'Point',
-        coordinates: startLocation.coordinates,
+        coordinates: {
+          latitude: startLocation.coordinates.latitude,
+          longitude: startLocation.coordinates.longitude,
+        },
         address: {
           addressLine1: startLocation.address.addressLine1,
           addressLine2: startLocation.address.addressLine2,
@@ -101,7 +108,10 @@ async function createRide(req, res) {
       endLocation: endLocation
         ? {
             type: 'Point',
-            coordinates: endLocation.coordinates,
+            coordinates: {
+              latitude: endLocation.coordinates.latitude,
+              longitude: endLocation.coordinates.longitude,
+            },
             address: {
               addressLine1: endLocation.address.addressLine1,
               addressLine2: endLocation.address.addressLine2,
@@ -151,9 +161,17 @@ async function createRide(req, res) {
 // @query   {number} page - Page number for pagination (default: 1)
 // @query   {number} limit - Number of rides per page (default: 10, max: 50)
 // @query   {boolean} participant - Filter rides where user is owner or participant
+// @query   {string} search - Search rides by name, start location, or end location (case-insensitive)
 async function getRides(req, res) {
   try {
-    const { owner, startTime, page = 1, limit = 10, participant } = req.query;
+    const {
+      owner,
+      startTime,
+      page = 1,
+      limit = 10,
+      participant,
+      search,
+    } = req.query;
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 10));
@@ -179,6 +197,38 @@ async function getRides(req, res) {
           { owner: { $ne: req.user.id } },
           { 'participants.user': { $ne: req.user.id } },
         ];
+      }
+    }
+
+    // Add search filter if search parameter is provided
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i');
+      const searchConditions = [
+        { name: searchRegex },
+        { 'startLocation.address.city': searchRegex },
+        { 'startLocation.address.stateProvince': searchRegex },
+        { 'startLocation.address.country': searchRegex },
+        { 'endLocation.address.city': searchRegex },
+        { 'endLocation.address.stateProvince': searchRegex },
+        { 'endLocation.address.country': searchRegex },
+      ];
+
+      if (Object.keys(filterObj).length > 0) {
+        if (filterObj.$and) {
+          filterObj.$and.push({ $or: searchConditions });
+        } else if (filterObj.$or) {
+          const existingOrConditions = filterObj.$or;
+          delete filterObj.$or;
+          filterObj.$and = [existingOrConditions, { $or: searchConditions }];
+        } else {
+          const existingConditions = { ...filterObj };
+          filterObj.$and = [existingConditions, { $or: searchConditions }];
+          Object.keys(existingConditions).forEach((key) => {
+            delete filterObj[key];
+          });
+        }
+      } else {
+        filterObj.$or = searchConditions;
       }
     }
 
@@ -238,6 +288,7 @@ async function getRides(req, res) {
         owner: owner || 'all',
         startTime: startTime || 'asc',
         participant: participant || 'false',
+        search: search || null,
       },
     });
   } catch (err) {
@@ -956,6 +1007,152 @@ async function removeParticipant(req, res) {
   }
 }
 
+// @desc    Get nearby rides within specified radius
+// @route   GET /api/v1/rides/nearby
+// @access  Public
+// @query   {number} latitude - Latitude coordinate
+// @query   {number} longitude - Longitude coordinate
+// @query   {number} radius - Search radius in kilometers (default: 50)
+async function getNearbyRides(req, res) {
+  try {
+    const {
+      latitude: latStr,
+      longitude: lngStr,
+      radius: radiusStr = 50,
+      page: pageStr = 1,
+      limit: limitStr = 10,
+    } = req.query;
+
+    // Validate required coordinates
+    if (!latStr || !lngStr) {
+      return res.status(400).json({
+        success: false,
+        error: 'Latitude and longitude are required',
+      });
+    }
+
+    // Convert string parameters to numbers
+    const latitude = parseFloat(latStr);
+    const longitude = parseFloat(lngStr);
+    const radius = parseFloat(radiusStr);
+    const page = parseInt(pageStr, 10);
+    const limit = parseInt(limitStr, 10);
+
+    // Check if conversion was successful
+    if (Number.isNaN(latitude) || Number.isNaN(longitude)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Latitude and longitude must be valid numbers',
+      });
+    }
+
+    if (Number.isNaN(radius) || Number.isNaN(page) || Number.isNaN(limit)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Radius, page, and limit must be valid numbers',
+      });
+    }
+
+    if (latitude < -90 || latitude > 90) {
+      return res.status(400).json({
+        success: false,
+        error: 'Latitude must be between -90 and 90',
+      });
+    }
+
+    if (longitude < -180 || longitude > 180) {
+      return res.status(400).json({
+        success: false,
+        error: 'Longitude must be between -180 and 180',
+      });
+    }
+
+    // Validate radius
+    const radiusKm = Math.min(100, Math.max(1, radius)); // Limit radius between 1-100km
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 10));
+    const skip = (pageNum - 1) * limitNum;
+
+    // Create a simple distance-based filter using coordinate bounds
+    // This is more efficient than complex $expr calculations
+    const latDelta = radiusKm / 111; // Rough conversion: 1 degree ≈ 111 km
+    const lngDelta = radiusKm / (111 * Math.cos((latitude * Math.PI) / 180)); // Adjust for longitude for latitude
+
+    const filterObj = {
+      'startLocation.coordinates.latitude': {
+        $gte: latitude - latDelta,
+        $lte: latitude + latDelta,
+      },
+      'startLocation.coordinates.longitude': {
+        $gte: longitude - lngDelta,
+        $lte: longitude + lngDelta,
+      },
+    };
+
+    // Get total count for pagination
+    const totalRides = await Ride.countDocuments(filterObj);
+    const totalPages = Math.ceil(totalRides / limitNum);
+
+    // Find nearby rides with pagination
+    const rides = await Ride.find(filterObj)
+      .populate('owner', 'name handle profileImage email')
+      .populate('participants.user', 'name handle profileImage email')
+      .sort({ startTime: 1 })
+      .skip(skip)
+      .limit(limitNum);
+
+    // Organize participants for each ride to match getRides structure
+    const ridesWithOrganizedParticipants = rides.map((ride) => {
+      const rideObj = ride.toObject();
+      const approvedCount = rideObj.participants.filter(
+        (p) => p.isApproved,
+      ).length;
+      const pendingCount = rideObj.participants.filter(
+        (p) => !p.isApproved,
+      ).length;
+
+      rideObj.participants = {
+        approved: approvedCount,
+        pending: pendingCount,
+        total: rideObj.maxParticipants || 0,
+        available: rideObj.maxParticipants
+          ? rideObj.maxParticipants - approvedCount
+          : 0,
+      };
+      return rideObj;
+    });
+
+    res.status(200).json({
+      success: true,
+      count: ridesWithOrganizedParticipants.length,
+      total: totalRides,
+      data: ridesWithOrganizedParticipants,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1,
+        nextPage: pageNum < totalPages ? pageNum + 1 : null,
+        prevPage: pageNum > 1 ? pageNum - 1 : null,
+        limit: limitNum,
+      },
+      search: {
+        latitude,
+        longitude,
+        radius: radiusKm,
+        unit: 'kilometers',
+      },
+    });
+  } catch (err) {
+    console.error('Error getting nearby rides:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Server Error getting nearby rides',
+    });
+  }
+}
+
 module.exports = {
   createRide,
   getRides,
@@ -968,4 +1165,5 @@ module.exports = {
   getRideParticipants,
   deleteRideRequest,
   removeParticipant,
+  getNearbyRides,
 };

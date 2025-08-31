@@ -150,7 +150,7 @@ function generateCoordinates() {
   // Roughly centered around US coordinates
   const lat = 35 + (Math.random() - 0.5) * 20; // 25-45 latitude
   const lng = -100 + (Math.random() - 0.5) * 40; // -80 to -120 longitude
-  return [lng, lat]; // MongoDB expects [longitude, latitude]
+  return { latitude: lat, longitude: lng }; // New format: {latitude, longitude}
 }
 
 // Generate random address
@@ -192,14 +192,14 @@ function generateRoute(startCoords, endCoords) {
 
   for (let i = 1; i < numPoints - 1; i += 1) {
     const lat =
-      startCoords[1] +
-      (endCoords[1] - startCoords[1]) * (i / (numPoints - 1)) +
+      startCoords.latitude +
+      (endCoords.latitude - startCoords.latitude) * (i / (numPoints - 1)) +
       (Math.random() - 0.5) * 0.1;
     const lng =
-      startCoords[0] +
-      (endCoords[0] - startCoords[0]) * (i / (numPoints - 1)) +
+      startCoords.longitude +
+      (endCoords.longitude - startCoords.longitude) * (i / (numPoints - 1)) +
       (Math.random() - 0.5) * 0.1;
-    route.push([lng, lat]);
+    route.push({ latitude: lat, longitude: lng });
   }
 
   route.push(endCoords);

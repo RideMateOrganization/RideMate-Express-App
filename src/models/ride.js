@@ -34,9 +34,14 @@ const LocationSchema = new mongoose.Schema(
       required: true,
     },
     coordinates: {
-      type: [Number],
-      required: [true, 'Coordinates are required'],
-      index: '2dsphere',
+      latitude: {
+        type: Number,
+        required: [true, 'Latitude is required'],
+      },
+      longitude: {
+        type: Number,
+        required: [true, 'Longitude is required'],
+      },
     },
     address: {
       type: AddressSchema,
@@ -163,5 +168,19 @@ RideSchema.pre('save', function (next) {
   }
   next();
 });
+
+// Add compound indexes for efficient coordinate-based queries
+RideSchema.index({
+  'startLocation.coordinates.latitude': 1,
+  'startLocation.coordinates.longitude': 1,
+});
+RideSchema.index({
+  'endLocation.coordinates.latitude': 1,
+  'endLocation.coordinates.longitude': 1,
+});
+RideSchema.index({ startTime: 1 });
+RideSchema.index({ owner: 1 });
+RideSchema.index({ 'participants.user': 1 });
+RideSchema.index({ rideId: 1 }, { unique: true });
 
 module.exports = mongoose.model('Ride', RideSchema);
