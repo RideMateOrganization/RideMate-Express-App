@@ -181,6 +181,5 @@ RideSchema.index({
 RideSchema.index({ startTime: 1 });
 RideSchema.index({ owner: 1 });
 RideSchema.index({ 'participants.user': 1 });
-RideSchema.index({ rideId: 1 }, { unique: true });
 
 module.exports = mongoose.model('Ride', RideSchema);

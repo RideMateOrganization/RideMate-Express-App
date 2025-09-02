@@ -635,32 +635,35 @@ async function approveRejectRequest(req, res) {
       });
     }
 
-    // Update request status
-    request.status = action === 'approve' ? 'approved' : 'rejected';
-    request.respondedAt = new Date();
-    request.respondedBy = ownerId;
-    request.responseMessage = responseMessage || '';
-
-    await request.save();
-
     if (action === 'approve') {
-      // Check if ride has reached max participants
-      const approvedParticipants = await RideRequest.countDocuments({
+      // For approvals, we need to delete existing requests and create a new approved one
+      // because approved requests can't coexist with pending ones due to unique constraint
+      await RideRequest.deleteMany({
         ride: request.ride.id,
-        status: 'approved',
+        user: request.user.id,
       });
 
-      if (
-        request.ride.maxParticipants &&
-        approvedParticipants >= request.ride.maxParticipants
-      ) {
-        // Revert the approval if max participants reached
-        request.status = 'pending';
-        request.respondedAt = undefined;
-        request.respondedBy = undefined;
-        request.responseMessage = undefined;
-        await request.save();
+      // Create a new approved request
+      const updatedRequest = await RideRequest.create({
+        ride: request.ride.id,
+        user: request.user.id,
+        status: 'approved',
+        message: request.message,
+        respondedAt: new Date(),
+        respondedBy: ownerId,
+        responseMessage: responseMessage || '',
+      });
 
+      // Check if ride has reached max participants by looking at actual ride participants
+      const ride = await Ride.findById(request.ride.id);
+      const approvedParticipantsCount = ride.participants.filter(
+        (p) => p.isApproved,
+      ).length;
+
+      if (
+        ride.maxParticipants &&
+        approvedParticipantsCount >= ride.maxParticipants
+      ) {
         return res.status(400).json({
           success: false,
           error:
@@ -669,7 +672,6 @@ async function approveRejectRequest(req, res) {
       }
 
       // Add user to ride participants
-      const ride = await Ride.findById(request.ride.id);
       ride.participants.push({
         user: request.user.id,
         joinedAt: new Date(),
@@ -679,23 +681,96 @@ async function approveRejectRequest(req, res) {
 
       await ride.save();
 
+      // Send push notification to the approved user
+      const userDevice = await UserDevice.findOne({
+        user: request.user.id,
+        isActive: true,
+      }).sort({ lastSeen: -1 });
+
+      if (userDevice) {
+        await sendPushNotification(
+          userDevice.pushToken,
+          'Ride Request Approved!',
+          `Your request to join "${ride.name}" has been approved!`,
+          responseMessage || 'Welcome to the ride!',
+          {
+            notificationType: 'NOTIFICATION__USER_RIDE_REQUEST_APPROVED',
+            rideId: ride.id,
+            rideName: ride.name,
+            ownerName: req.user.name,
+            startTime: ride.startTime,
+          },
+        );
+      }
+
       res.status(200).json({
         success: true,
         message: 'Join request approved successfully',
         data: {
-          request,
+          request: updatedRequest,
           ride,
         },
       });
     } else {
+      // For rejections, simply update the existing request status
+      const updatedRequest = await RideRequest.findByIdAndUpdate(
+        requestId,
+        {
+          status: 'rejected',
+          respondedAt: new Date(),
+          respondedBy: ownerId,
+          responseMessage: responseMessage || '',
+        },
+        { new: true, runValidators: true },
+      );
+
+      if (!updatedRequest) {
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to reject request',
+        });
+      }
+
+      // Send push notification to the rejected user
+      const userDevice = await UserDevice.findOne({
+        user: request.user.id,
+        isActive: true,
+      }).sort({ lastSeen: -1 });
+
+      if (userDevice) {
+        await sendPushNotification(
+          userDevice.pushToken,
+          'Ride Request Rejected',
+          `Your request to join "${request.ride.name}" has been rejected`,
+          responseMessage || 'Your request was not approved',
+          {
+            notificationType: 'NOTIFICATION__USER_RIDE_REQUEST_REJECTED',
+            rideId: request.ride.id,
+            rideName: request.ride.name,
+            ownerName: req.user.name,
+            startTime: request.ride.startTime,
+          },
+        );
+      }
+
       res.status(200).json({
         success: true,
         message: 'Join request rejected',
-        data: request,
+        data: updatedRequest,
       });
     }
   } catch (err) {
     console.error('Error approving/rejecting request:', err);
+
+    // Handle duplicate key error specifically
+    if (err.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        error:
+          'This request has already been processed or there is a duplicate request.',
+      });
+    }
+
     res
       .status(500)
       .json({ success: false, error: 'Server Error processing request.' });
