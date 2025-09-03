@@ -9,6 +9,9 @@ const {
   getRideParticipants,
   removeParticipant,
   getNearbyRides,
+  startRide,
+  completeRide,
+  cancelRide,
 } = require('../../controller/ride');
 
 const router = express.Router();
@@ -20,6 +23,9 @@ router.route('/').get(getRides).post(createRide);
 router.route('/:id').get(getRide);
 router.post('/join/:id', joinRide);
 router.post('/leave/:id', leaveRide);
+router.post('/:id/start', startRide);
+router.post('/:id/complete', completeRide);
+router.post('/:id/cancel', cancelRide);
 router.get('/:id/participants', getRideParticipants);
 router.delete('/:id/participants/:participantId', removeParticipant);
 

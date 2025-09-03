@@ -1228,6 +1228,334 @@ async function getNearbyRides(req, res) {
   }
 }
 
+// @desc    Start a ride (change status from 'planned' to 'active')
+// @route   POST /api/v1/rides/:id/start
+// @access  Private
+async function startRide(req, res) {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const ride = await Ride.findById(id);
+
+    if (!ride) {
+      return res
+        .status(404)
+        .json({ success: false, error: `Ride not found with ID ${id}` });
+    }
+
+    // Check if the user is the owner of the ride
+    if (ride.owner.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'Only the ride owner can start the ride',
+      });
+    }
+
+    // Check if the ride is in 'planned' status
+    if (ride.status !== 'planned') {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot start ride. Current status is '${ride.status}'. Only planned rides can be started.`,
+      });
+    }
+
+    // Check if the start time has been reached
+    const now = new Date();
+    if (now < ride.startTime) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot start ride before the scheduled start time',
+      });
+    }
+
+    // Update ride status to 'active'
+    ride.status = 'active';
+    await ride.save();
+
+    // Send push notification to all participants
+    const participantIds = ride.participants
+      .filter((p) => p.isApproved && p.user.toString() !== userId.toString())
+      .map((p) => p.user);
+
+    // Collect all push tokens first
+    const userDevices = await Promise.all(
+      participantIds.map(async (participantId) =>
+        UserDevice.findOne({
+          user: participantId,
+          isActive: true,
+        }).sort({ lastSeen: -1 }),
+      ),
+    );
+
+    // Filter out devices without tokens and collect all valid tokens
+    const validDevices = userDevices.filter(
+      (device) => device && device.pushToken,
+    );
+    const pushTokens = validDevices.map((device) => device.pushToken);
+
+    if (pushTokens.length > 0) {
+      // Send all notifications in a single batch
+      const { tickets, invalidTokens } = await sendPushNotification(
+        pushTokens,
+        'Ride Started! 🚴‍♂️',
+        `The ride "${ride.name}" has started!. Safe travels ahead`,
+        `Your ride is now active. Have a great time!`,
+        {
+          notificationType: 'NOTIFICATION__RIDE_STARTED',
+          rideId: ride.id,
+          rideName: ride.name,
+          ownerName: req.user.name,
+          startTime: ride.startTime,
+        },
+      );
+
+      // Log results
+      console.log(
+        `Sent ${tickets.length} notifications, ${invalidTokens.length} invalid tokens`,
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Ride started successfully!',
+      data: {
+        ride: {
+          id: ride.id,
+          name: ride.name,
+          status: ride.status,
+          startedAt: new Date(),
+        },
+      },
+    });
+  } catch (err) {
+    console.error('Error starting ride:', err);
+    if (err.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid ride ID format',
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: 'Server Error starting ride',
+    });
+  }
+}
+
+// @desc    Complete a ride (change status from 'active' to 'completed')
+// @route   POST /api/v1/rides/:id/complete
+// @access  Private
+async function completeRide(req, res) {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const ride = await Ride.findById(id);
+
+    if (!ride) {
+      return res
+        .status(404)
+        .json({ success: false, error: `Ride not found with ID ${id}` });
+    }
+
+    // Check if the user is the owner of the ride
+    if (ride.owner.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'Only the ride owner can complete the ride',
+      });
+    }
+
+    // Check if the ride is in 'active' status
+    if (ride.status !== 'active') {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot complete ride. Current status is '${ride.status}'. Only active rides can be completed.`,
+      });
+    }
+
+    // Update ride status to 'completed' and set end time
+    ride.status = 'completed';
+    ride.endTime = new Date();
+    await ride.save();
+
+    // Send push notification to all participants
+    const participantIds = ride.participants
+      .filter((p) => p.isApproved && p.user.toString() !== userId.toString())
+      .map((p) => p.user);
+
+    // Collect all push tokens first
+    const userDevices = await Promise.all(
+      participantIds.map(async (participantId) =>
+        UserDevice.findOne({
+          user: participantId,
+          isActive: true,
+        }).sort({ lastSeen: -1 }),
+      ),
+    );
+
+    // Filter out devices without tokens and collect all valid tokens
+    const validDevices = userDevices.filter(
+      (device) => device && device.pushToken,
+    );
+    const pushTokens = validDevices.map((device) => device.pushToken);
+
+    if (pushTokens.length > 0) {
+      // Send all notifications in a single batch
+      const { tickets, invalidTokens } = await sendPushNotification(
+        pushTokens,
+        'Ride Completed! 🎉',
+        `The ride "${ride.name}" has been completed!`,
+        `Great job completing the ride! Hope you had a wonderful time.`,
+        {
+          notificationType: 'NOTIFICATION__RIDE_COMPLETED',
+          rideId: ride.id,
+          rideName: ride.name,
+          ownerName: req.user.name,
+          endTime: ride.endTime,
+        },
+      );
+
+      // Log results
+      console.log(
+        `Sent ${tickets.length} completion notifications, ${invalidTokens.length} invalid tokens`,
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Ride completed successfully!',
+      data: {
+        ride: {
+          id: ride.id,
+          name: ride.name,
+          status: ride.status,
+          completedAt: ride.endTime,
+        },
+      },
+    });
+  } catch (err) {
+    console.error('Error completing ride:', err);
+    if (err.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid ride ID format',
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: 'Server Error completing ride',
+    });
+  }
+}
+
+// @desc    Cancel a ride (change status to 'cancelled')
+// @route   POST /api/v1/rides/:id/cancel
+// @access  Private
+async function cancelRide(req, res) {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const ride = await Ride.findById(id);
+
+    if (!ride) {
+      return res
+        .status(404)
+        .json({ success: false, error: `Ride not found with ID ${id}` });
+    }
+
+    // Check if the user is the owner of the ride
+    if (ride.owner.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'Only the ride owner can cancel the ride',
+      });
+    }
+
+    // Check if the ride can be cancelled (only planned rides can be cancelled)
+    if (ride.status !== 'planned') {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot cancel ride. Current status is '${ride.status}'. Only planned rides can be cancelled.`,
+      });
+    }
+
+    // Update ride status to 'cancelled'
+    ride.status = 'cancelled';
+    await ride.save();
+
+    // Send push notification to all participants
+    const participantIds = ride.participants
+      .filter((p) => p.isApproved && p.user.toString() !== userId.toString())
+      .map((p) => p.user);
+
+    // Collect all push tokens first
+    const userDevices = await Promise.all(
+      participantIds.map(async (participantId) =>
+        UserDevice.findOne({
+          user: participantId,
+          isActive: true,
+        }).sort({ lastSeen: -1 }),
+      ),
+    );
+
+    // Filter out devices without tokens and collect all valid tokens
+    const validDevices = userDevices.filter(
+      (device) => device && device.pushToken,
+    );
+    const pushTokens = validDevices.map((device) => device.pushToken);
+
+    if (pushTokens.length > 0) {
+      // Send all notifications in a single batch
+      const { tickets, invalidTokens } = await sendPushNotification(
+        pushTokens,
+        'Ride Cancelled ❌',
+        `The ride "${ride.name}" has been cancelled`,
+        `The ride owner has cancelled this ride.`,
+        {
+          notificationType: 'NOTIFICATION__RIDE_CANCELLED',
+          rideId: ride.id,
+          rideName: ride.name,
+          ownerName: req.user.name,
+          startTime: ride.startTime,
+        },
+      );
+
+      // Log results
+      console.log(
+        `Sent ${tickets.length} cancellation notifications, ${invalidTokens.length} invalid tokens`,
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Ride cancelled successfully',
+      data: {
+        ride: {
+          id: ride.id,
+          name: ride.name,
+          status: ride.status,
+          cancelledAt: new Date(),
+        },
+      },
+    });
+  } catch (err) {
+    console.error('Error cancelling ride:', err);
+    if (err.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid ride ID format',
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: 'Server Error cancelling ride',
+    });
+  }
+}
+
 module.exports = {
   createRide,
   getRides,
@@ -1241,4 +1569,7 @@ module.exports = {
   deleteRideRequest,
   removeParticipant,
   getNearbyRides,
+  startRide,
+  completeRide,
+  cancelRide,
 };
