@@ -5,12 +5,10 @@ const userSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      // required: [true, 'Please provide a name'],
       trim: true,
     },
     email: {
       type: String,
-      // required: [true, 'Please provide an email'],
       unique: true,
       sparse: true,
       match: [
@@ -20,13 +18,11 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      // required: [true, 'Please provide a password'],
       minlength: [6, 'Password must be at least 6 characters long'],
       select: false,
     },
     handle: {
       type: String,
-      // required: [true, 'Please provide a handle'],
       unique: true,
       trim: true,
       match: [
@@ -45,6 +41,19 @@ const userSchema = new mongoose.Schema(
       maxlength: [200, 'Bio cannot be more than 200 characters long'],
       trim: true,
       default: '',
+    },
+    gender: {
+      type: String,
+      enum: ['male', 'female', 'other', 'prefer not to say'],
+      default: 'prefer not to say',
+    },
+    dob: {
+      type: Date,
+    },
+    bloodGroup: {
+      type: String,
+      enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'],
+      default: null,
     },
     address: {
       type: String,
