@@ -14,6 +14,11 @@ const {
   cancelRide,
 } = require('../../controller/ride');
 
+const {
+  uploadRideImage,
+  getRideImages,
+} = require('../../controller/ride-image');
+
 const router = express.Router();
 
 router.use(protect);
@@ -28,5 +33,7 @@ router.post('/:id/complete', completeRide);
 router.post('/:id/cancel', cancelRide);
 router.get('/:id/participants', getRideParticipants);
 router.delete('/:id/participants/:participantId', removeParticipant);
+
+router.route('/:id/images').get(getRideImages).post(uploadRideImage);
 
 module.exports = router;
