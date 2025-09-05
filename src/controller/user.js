@@ -108,8 +108,7 @@ async function updateUser(req, res) {
       const errors = Object.values(error.errors).map((err) => err.message);
       return res.status(400).json({
         success: false,
-        error: 'Validation Error',
-        details: errors,
+        error: errors.join(', '),
       });
     }
 
