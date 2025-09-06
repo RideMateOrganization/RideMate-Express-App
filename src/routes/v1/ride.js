@@ -17,6 +17,7 @@ const {
 const {
   uploadRideImage,
   getRideImages,
+  deleteRideImage,
 } = require('../../controller/ride-image');
 
 const router = express.Router();
@@ -35,5 +36,6 @@ router.get('/:id/participants', getRideParticipants);
 router.delete('/:id/participants/:participantId', removeParticipant);
 
 router.route('/:id/images').get(getRideImages).post(uploadRideImage);
+router.delete('/:id/images/:imageId', deleteRideImage);
 
 module.exports = router;
