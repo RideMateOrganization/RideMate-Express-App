@@ -20,6 +20,16 @@ const {
   deleteRideImage,
 } = require('../../controller/ride-image');
 
+const {
+  addComment,
+  getComments,
+  updateComment,
+  deleteComment,
+  getComment,
+  toggleLike,
+  getCommentLikes,
+} = require('../../controller/ride-comments');
+
 const router = express.Router();
 
 router.use(protect);
@@ -37,5 +47,15 @@ router.delete('/:id/participants/:participantId', removeParticipant);
 
 router.route('/:id/images').get(getRideImages).post(uploadRideImage);
 router.delete('/:id/images/:imageId', deleteRideImage);
+
+// Comment routes
+router.route('/:rideId/comments').get(getComments).post(addComment);
+router
+  .route('/:rideId/comments/:commentId')
+  .get(getComment)
+  .put(updateComment)
+  .delete(deleteComment);
+router.post('/:rideId/comments/:commentId/like', toggleLike);
+router.get('/:rideId/comments/:commentId/likes', getCommentLikes);
 
 module.exports = router;
