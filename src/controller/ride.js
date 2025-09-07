@@ -162,6 +162,7 @@ async function createRide(req, res) {
 // @query   {number} limit - Number of rides per page (default: 10, max: 50)
 // @query   {boolean} participant - Filter rides where user is owner or participant
 // @query   {string} search - Search rides by name, start location, or end location (case-insensitive)
+// @query   {boolean} completed - Show only completed rides when true
 async function getRides(req, res) {
   try {
     const {
@@ -171,6 +172,7 @@ async function getRides(req, res) {
       limit = 10,
       participant,
       search,
+      completed,
     } = req.query;
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
@@ -179,6 +181,17 @@ async function getRides(req, res) {
 
     const filterObj = {};
 
+    // Handle status filtering based on completed parameter
+    let statusFilter;
+    if (completed === 'true') {
+      // Show only completed rides
+      statusFilter = { status: 'completed' };
+    } else {
+      // By default, exclude completed and cancelled rides
+      statusFilter = { status: { $nin: ['completed', 'cancelled'] } };
+    }
+
+    // Apply user-based filters
     if (req.user) {
       if (owner === 'true') {
         filterObj.owner = req.user.id;
@@ -198,6 +211,26 @@ async function getRides(req, res) {
           { 'participants.user': { $ne: req.user.id } },
         ];
       }
+    }
+
+    // Combine status filter with existing filters
+    if (Object.keys(filterObj).length > 0) {
+      if (filterObj.$and) {
+        filterObj.$and.push(statusFilter);
+      } else if (filterObj.$or) {
+        const existingOrConditions = filterObj.$or;
+        delete filterObj.$or;
+        filterObj.$and = [{ $or: existingOrConditions }, statusFilter];
+      } else {
+        const existingConditions = { ...filterObj };
+        filterObj.$and = [existingConditions, statusFilter];
+        Object.keys(existingConditions).forEach((key) => {
+          delete filterObj[key];
+        });
+      }
+    } else {
+      // No other filters, just apply status filter directly
+      Object.assign(filterObj, statusFilter);
     }
 
     // Add search filter if search parameter is provided
@@ -289,6 +322,7 @@ async function getRides(req, res) {
         startTime: startTime || 'asc',
         participant: participant || 'false',
         search: search || null,
+        completed: completed || 'false',
       },
     });
   } catch (err) {
@@ -1163,6 +1197,8 @@ async function getNearbyRides(req, res) {
         $gte: longitude - lngDelta,
         $lte: longitude + lngDelta,
       },
+      // By default, exclude completed and cancelled rides
+      status: { $nin: ['completed', 'cancelled'] },
     };
 
     // Get total count for pagination
