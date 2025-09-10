@@ -91,10 +91,10 @@ async function createRide(req, res) {
       endTime: endTime ? new Date(endTime) : undefined,
       startLocation: {
         type: 'Point',
-        coordinates: {
-          latitude: startLocation.coordinates.latitude,
-          longitude: startLocation.coordinates.longitude,
-        },
+        coordinates: [
+          startLocation.coordinates.longitude,
+          startLocation.coordinates.latitude,
+        ], // Transform to GeoJSON format
         address: {
           addressLine1: startLocation.address.addressLine1,
           addressLine2: startLocation.address.addressLine2,
@@ -108,10 +108,10 @@ async function createRide(req, res) {
       endLocation: endLocation
         ? {
             type: 'Point',
-            coordinates: {
-              latitude: endLocation.coordinates.latitude,
-              longitude: endLocation.coordinates.longitude,
-            },
+            coordinates: [
+              endLocation.coordinates.longitude,
+              endLocation.coordinates.latitude,
+            ], // Transform to GeoJSON format
             address: {
               addressLine1: endLocation.address.addressLine1,
               addressLine2: endLocation.address.addressLine2,
@@ -1189,11 +1189,13 @@ async function getNearbyRides(req, res) {
     const lngDelta = radiusKm / (111 * Math.cos((latitude * Math.PI) / 180)); // Adjust for longitude for latitude
 
     const filterObj = {
-      'startLocation.coordinates.latitude': {
+      'startLocation.coordinates.1': {
+        // latitude is at index 1
         $gte: latitude - latDelta,
         $lte: latitude + latDelta,
       },
-      'startLocation.coordinates.longitude': {
+      'startLocation.coordinates.0': {
+        // longitude is at index 0
         $gte: longitude - lngDelta,
         $lte: longitude + lngDelta,
       },

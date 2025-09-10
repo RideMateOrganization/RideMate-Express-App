@@ -34,13 +34,13 @@ const LocationSchema = new mongoose.Schema(
       required: true,
     },
     coordinates: {
-      latitude: {
-        type: Number,
-        required: [true, 'Latitude is required'],
-      },
-      longitude: {
-        type: Number,
-        required: [true, 'Longitude is required'],
+      type: [Number],
+      required: [true, 'Coordinates are required'],
+      validate: {
+        validator: function validator(v) {
+          return v.length === 2;
+        },
+        message: 'Coordinates must be an array of [longitude, latitude].',
       },
     },
     address: {
@@ -104,15 +104,9 @@ const RideSchema = new mongoose.Schema(
       required: [true, 'Please add a start location'],
     },
     endLocation: LocationSchema,
-    route: {
-      type: {
-        type: String,
-        enum: ['LineString'],
-        default: 'LineString',
-      },
-      coordinates: {
-        type: [[Number]],
-      },
+    plannedRoute: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'RoutePath',
     },
     maxParticipants: {
       type: Number,
@@ -152,7 +146,7 @@ const RideSchema = new mongoose.Schema(
 );
 
 // Add owner as a participant if not already present
-RideSchema.pre('save', function (next) {
+RideSchema.pre('save', function addOwnerAsParticipant(next) {
   if (this.isNew) {
     const ownerExists = this.participants.some((p) =>
       p.user.equals(this.owner),
@@ -169,17 +163,12 @@ RideSchema.pre('save', function (next) {
   next();
 });
 
-// Add compound indexes for efficient coordinate-based queries
-RideSchema.index({
-  'startLocation.coordinates.latitude': 1,
-  'startLocation.coordinates.longitude': 1,
-});
-RideSchema.index({
-  'endLocation.coordinates.latitude': 1,
-  'endLocation.coordinates.longitude': 1,
-});
+// Add geospatial indexes for efficient coordinate-based queries
+RideSchema.index({ 'startLocation.coordinates': '2dsphere' });
+RideSchema.index({ 'endLocation.coordinates': '2dsphere' });
 RideSchema.index({ startTime: 1 });
 RideSchema.index({ owner: 1 });
+RideSchema.index({ plannedRoute: 1 });
 RideSchema.index({ 'participants.user': 1 });
 
 module.exports = mongoose.model('Ride', RideSchema);
