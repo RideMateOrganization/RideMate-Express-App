@@ -31,8 +31,8 @@ async function createRide(req, res) {
       !startTime ||
       !startLocation ||
       !startLocation.coordinates ||
-      !startLocation.coordinates.latitude ||
-      !startLocation.coordinates.longitude ||
+      !Array.isArray(startLocation.coordinates) ||
+      startLocation.coordinates.length !== 2 ||
       !startLocation.address ||
       !startLocation.address.city ||
       !startLocation.address.country
@@ -40,17 +40,17 @@ async function createRide(req, res) {
       return res.status(400).json({
         success: false,
         error:
-          'Please provide ride name, start time, start location coordinates (latitude and longitude), city, and country.',
+          'Please provide ride name, start time, start location coordinates as [longitude, latitude] array, city, and country.',
       });
     }
     if (
-      typeof startLocation.coordinates.latitude !== 'number' ||
-      typeof startLocation.coordinates.longitude !== 'number'
+      typeof startLocation.coordinates[0] !== 'number' ||
+      typeof startLocation.coordinates[1] !== 'number'
     ) {
       return res.status(400).json({
         success: false,
         error:
-          'Start location coordinates must be valid numbers for latitude and longitude.',
+          'Start location coordinates must be valid numbers in [longitude, latitude] format.',
       });
     }
 
@@ -58,15 +58,15 @@ async function createRide(req, res) {
     if (endLocation) {
       if (
         !endLocation.coordinates ||
-        !endLocation.coordinates.latitude ||
-        !endLocation.coordinates.longitude ||
-        typeof endLocation.coordinates.latitude !== 'number' ||
-        typeof endLocation.coordinates.longitude !== 'number'
+        !Array.isArray(endLocation.coordinates) ||
+        endLocation.coordinates.length !== 2 ||
+        typeof endLocation.coordinates[0] !== 'number' ||
+        typeof endLocation.coordinates[1] !== 'number'
       ) {
         return res.status(400).json({
           success: false,
           error:
-            'End location coordinates must include valid latitude and longitude numbers if endLocation is provided.',
+            'End location coordinates must be provided as [longitude, latitude] array if endLocation is provided.',
         });
       }
       if (
@@ -91,10 +91,7 @@ async function createRide(req, res) {
       endTime: endTime ? new Date(endTime) : undefined,
       startLocation: {
         type: 'Point',
-        coordinates: [
-          startLocation.coordinates.longitude,
-          startLocation.coordinates.latitude,
-        ], // Transform to GeoJSON format
+        coordinates: startLocation.coordinates, // Already in [longitude, latitude] format
         address: {
           addressLine1: startLocation.address.addressLine1,
           addressLine2: startLocation.address.addressLine2,
@@ -108,10 +105,7 @@ async function createRide(req, res) {
       endLocation: endLocation
         ? {
             type: 'Point',
-            coordinates: [
-              endLocation.coordinates.longitude,
-              endLocation.coordinates.latitude,
-            ], // Transform to GeoJSON format
+            coordinates: endLocation.coordinates, // Already in [longitude, latitude] format
             address: {
               addressLine1: endLocation.address.addressLine1,
               addressLine2: endLocation.address.addressLine2,

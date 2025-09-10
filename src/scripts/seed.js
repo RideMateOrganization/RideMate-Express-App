@@ -178,9 +178,10 @@ function generateAddress() {
 
 // Generate random location
 function generateLocation() {
+  const coords = generateCoordinates();
   return {
     type: 'Point',
-    coordinates: generateCoordinates(),
+    coordinates: [coords.longitude, coords.latitude], // Convert to [longitude, latitude] array format
     address: generateAddress(),
   };
 }
@@ -191,15 +192,15 @@ function generateRoute(startCoords, endCoords) {
   const route = [startCoords];
 
   for (let i = 1; i < numPoints - 1; i += 1) {
-    const lat =
-      startCoords.latitude +
-      (endCoords.latitude - startCoords.latitude) * (i / (numPoints - 1)) +
-      (Math.random() - 0.5) * 0.1;
     const lng =
-      startCoords.longitude +
-      (endCoords.longitude - startCoords.longitude) * (i / (numPoints - 1)) +
+      startCoords[0] +
+      (endCoords[0] - startCoords[0]) * (i / (numPoints - 1)) +
       (Math.random() - 0.5) * 0.1;
-    route.push({ latitude: lat, longitude: lng });
+    const lat =
+      startCoords[1] +
+      (endCoords[1] - startCoords[1]) * (i / (numPoints - 1)) +
+      (Math.random() - 0.5) * 0.1;
+    route.push([lng, lat]); // [longitude, latitude] format
   }
 
   route.push(endCoords);
