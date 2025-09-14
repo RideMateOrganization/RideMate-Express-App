@@ -12,6 +12,8 @@ const {
   startRide,
   completeRide,
   cancelRide,
+  getRideTracking,
+  updateLocationTracking,
 } = require('../../controller/ride');
 
 const {
@@ -44,6 +46,8 @@ router.post('/:id/complete', completeRide);
 router.post('/:id/cancel', cancelRide);
 router.get('/:id/participants', getRideParticipants);
 router.delete('/:id/participants/:participantId', removeParticipant);
+router.get('/:id/tracking', getRideTracking);
+router.post('/:id/ping', updateLocationTracking);
 
 router.route('/:id/images').get(getRideImages).post(uploadRideImage);
 router.delete('/:id/images/:imageId', deleteRideImage);

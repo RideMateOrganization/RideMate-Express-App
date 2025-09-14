@@ -39,9 +39,21 @@ const RideTrackingSchema = new mongoose.Schema(
             },
           },
         },
-        speed: Number,
-        altitude: Number,
-        heading: Number,
+        // Basic GPS data
+        speed: {
+          type: Number, // in m/s
+          min: 0,
+        },
+        heading: {
+          type: Number, // in degrees (0-360)
+          min: 0,
+          max: 360,
+        },
+        // Distance from previous point
+        distanceFromPrevious: {
+          type: Number, // in meters
+          min: 0,
+        },
       },
     ],
     trackingStatus: {
@@ -49,6 +61,58 @@ const RideTrackingSchema = new mongoose.Schema(
       enum: ['active', 'paused', 'completed', 'stopped'],
       default: 'active',
       required: true,
+    },
+    // Start and end times for this tracking session
+    startTime: {
+      type: Date,
+      default: Date.now,
+    },
+    endTime: {
+      type: Date,
+    },
+    // Calculated statistics for this user's ride
+    calculatedStats: {
+      totalDistance: {
+        type: Number, // in meters
+        default: 0,
+        min: 0,
+      },
+      averageSpeed: {
+        type: Number, // in m/s
+        default: 0,
+        min: 0,
+      },
+      maxSpeed: {
+        type: Number, // in m/s
+        default: 0,
+        min: 0,
+      },
+      totalDuration: {
+        type: Number, // in seconds
+        default: 0,
+        min: 0,
+      },
+    },
+    // Last known position for quick access
+    lastKnownPosition: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number],
+        validate: {
+          validator: function validator(v) {
+            return v.length === 2;
+          },
+          message: 'Coordinates must be an array of [longitude, latitude].',
+        },
+      },
+      timestamp: {
+        type: Date,
+        default: Date.now,
+      },
     },
   },
   { timestamps: true },

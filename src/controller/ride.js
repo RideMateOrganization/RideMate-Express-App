@@ -1,12 +1,19 @@
 const { Types } = require('mongoose');
+const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 
 const Ride = require('../models/ride');
 const RideRequest = require('../models/ride-requests');
+const RideTracking = require('../models/ride-tracking');
 const UserDevice = require('../models/user-device');
 
 const { RideVisibility } = require('../utils/constants');
 const { sendPushNotification } = require('../utils/expo-push-manager');
+const {
+  updateRideStats,
+  updateParticipantStats,
+} = require('../utils/ride-stats-updater');
+const { calculateRideStats } = require('../utils/ride-stats-calculator');
 
 // Create a new ride
 // @route POST /api/rides
@@ -355,10 +362,33 @@ async function getRide(req, res) {
         : 0,
     };
 
+    // Fetch tracked route for the current user
+    let userTrackedRoute = null;
+    if (req.user && req.user.id) {
+      try {
+        const trackingData = await RideTracking.findOne({
+          ride: req.params.id,
+          user: req.user.id,
+        });
+
+        if (trackingData) {
+          userTrackedRoute = {
+            path: trackingData.path,
+            trackingStatus: trackingData.trackingStatus,
+            lastUpdated: trackingData.updatedAt,
+          };
+        }
+      } catch (trackingErr) {
+        console.error('Error fetching user tracking data:', trackingErr);
+        // Don't fail the entire request if tracking data fetch fails
+      }
+    }
+
     // Prepare response data
     const responseData = {
       ...ride.toObject(),
       participants: organizedParticipants,
+      userTrackedRoute,
     };
 
     res.status(200).json({
@@ -1115,13 +1145,13 @@ async function removeParticipant(req, res) {
 // @access  Public
 // @query   {number} latitude - Latitude coordinate
 // @query   {number} longitude - Longitude coordinate
-// @query   {number} radius - Search radius in kilometers (default: 50)
+// @query   {number} radius - Search radius in meters (default: 50000)
 async function getNearbyRides(req, res) {
   try {
     const {
       latitude: latStr,
       longitude: lngStr,
-      radius: radiusStr = 50,
+      radius: radiusStr = 50000,
       page: pageStr = 1,
       limit: limitStr = 10,
     } = req.query;
@@ -1171,7 +1201,7 @@ async function getNearbyRides(req, res) {
     }
 
     // Validate radius
-    const radiusKm = Math.min(100, Math.max(1, radius)); // Limit radius between 1-100km
+    const radiusM = Math.min(100000, Math.max(1000, radius)); // Limit radius between 1-100km
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 10));
@@ -1179,8 +1209,8 @@ async function getNearbyRides(req, res) {
 
     // Create a simple distance-based filter using coordinate bounds
     // This is more efficient than complex $expr calculations
-    const latDelta = radiusKm / 111; // Rough conversion: 1 degree ≈ 111 km
-    const lngDelta = radiusKm / (111 * Math.cos((latitude * Math.PI) / 180)); // Adjust for longitude for latitude
+    const latDelta = radiusM / 111000; // Rough conversion: 1 degree ≈ 111 km = 111000m
+    const lngDelta = radiusM / (111000 * Math.cos((latitude * Math.PI) / 180)); // Adjust for longitude for latitude
 
     const filterObj = {
       'startLocation.coordinates.1': {
@@ -1247,8 +1277,8 @@ async function getNearbyRides(req, res) {
       search: {
         latitude,
         longitude,
-        radius: radiusKm,
-        unit: 'kilometers',
+        radius: radiusM,
+        unit: 'meters',
       },
     });
   } catch (err) {
@@ -1411,6 +1441,33 @@ async function completeRide(req, res) {
     ride.status = 'completed';
     ride.endTime = new Date();
     await ride.save();
+
+    // Calculate and update statistics for all participants
+    const allTrackingData = await RideTracking.find({
+      ride: id,
+    });
+
+    // Calculate stats for each participant and update their records
+    await Promise.all(
+      allTrackingData
+        .filter((trackingData) => trackingData.path.length > 0)
+        .map(async (trackingData) => {
+          const stats = calculateRideStats(trackingData.path);
+
+          // Update calculated stats in tracking document
+          await RideTracking.findByIdAndUpdate(trackingData.id, {
+            $set: {
+              calculatedStats: stats,
+            },
+          });
+
+          // Update participant stats in the ride
+          await updateParticipantStats(id, trackingData.user, stats);
+        }),
+    );
+
+    // Update aggregated ride statistics
+    await updateRideStats(id);
 
     // Send push notification to all participants
     const participantIds = ride.participants
@@ -1588,6 +1645,250 @@ async function cancelRide(req, res) {
   }
 }
 
+// @desc    Update location tracking for a ride
+// @route   POST /api/v1/rides/:id/location
+// @access  Private
+async function updateLocationTracking(req, res) {
+  try {
+    const { id: rideId } = req.params;
+    const { userId, latitude, longitude, timestamp } = req.body;
+
+    // Validate required fields
+    if (!userId || !latitude || !longitude) {
+      return res.status(400).json({
+        success: false,
+        error: 'userId, latitude, and longitude are required',
+      });
+    }
+
+    // Validate data types
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+      return res.status(400).json({
+        success: false,
+        error: 'latitude and longitude must be numbers',
+      });
+    }
+
+    // Validate coordinate ranges
+    if (latitude < -90 || latitude > 90) {
+      return res.status(400).json({
+        success: false,
+        error: 'latitude must be between -90 and 90',
+      });
+    }
+
+    if (longitude < -180 || longitude > 180) {
+      return res.status(400).json({
+        success: false,
+        error: 'longitude must be between -180 and 180',
+      });
+    }
+
+    // Validate ObjectIds
+    if (!mongoose.Types.ObjectId.isValid(rideId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid ride ID format',
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid user ID format',
+      });
+    }
+
+    // Verify the ride exists and user has access
+    const ride = await Ride.findById(rideId);
+    if (!ride) {
+      return res.status(404).json({
+        success: false,
+        error: `Ride not found with ID ${rideId}`,
+      });
+    }
+
+    // Check if user is owner or approved participant
+    const isOwner = ride.owner.toString() === userId.toString();
+    const isApprovedParticipant = ride.participants.some(
+      (p) => p.user.toString() === userId.toString() && p.isApproved,
+    );
+
+    if (!isOwner && !isApprovedParticipant) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied: not owner or approved participant',
+      });
+    }
+
+    // Parse timestamp if provided, otherwise use current time
+    const trackingTimestamp = timestamp ? new Date(timestamp) : new Date();
+
+    // Update or create tracking data
+    const updatedTracking = await RideTracking.findOneAndUpdate(
+      { ride: rideId, user: userId },
+      {
+        $push: {
+          path: {
+            timestamp: trackingTimestamp,
+            coordinates: {
+              type: 'Point',
+              coordinates: [longitude, latitude], // GeoJSON order: [longitude, latitude]
+            },
+          },
+        },
+        $set: {
+          lastKnownPosition: {
+            type: 'Point',
+            coordinates: [Number(longitude), Number(latitude)],
+            timestamp: trackingTimestamp,
+          },
+        },
+        $setOnInsert: {
+          ride: rideId,
+          user: userId,
+          trackingStatus: 'active',
+          startTime: trackingTimestamp,
+        },
+      },
+      {
+        upsert: true, // Create the document if it doesn't exist
+        new: true, // Return the updated document
+        setDefaultsOnInsert: true, // Apply default values if upserting a new document
+        runValidators: true, // Run schema validators
+      },
+    );
+
+    // Calculate and update statistics if we have path data
+    if (updatedTracking && updatedTracking.path.length > 0) {
+      const stats = calculateRideStats(updatedTracking.path);
+      await RideTracking.findByIdAndUpdate(updatedTracking.id, {
+        $set: {
+          calculatedStats: stats,
+        },
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Location updated successfully',
+      data: {
+        rideId,
+        userId,
+        coordinates: [longitude, latitude],
+        timestamp: trackingTimestamp,
+        trackingStatus: updatedTracking.trackingStatus,
+        totalPoints: updatedTracking.path.length,
+      },
+    });
+  } catch (err) {
+    console.error('Error updating location tracking:', err);
+    if (err.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid ID format',
+      });
+    }
+    if (err.name === 'ValidationError') {
+      const messages = Object.values(err.errors).map((val) => val.message);
+      return res.status(400).json({
+        success: false,
+        error: messages.join(', '),
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: 'Server Error updating location tracking',
+    });
+  }
+}
+
+// @desc    Get ride tracking data for the logged-in user
+// @route   GET /api/v1/rides/:id/tracking
+// @access  Private
+async function getRideTracking(req, res) {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    // First, verify the ride exists and user has access
+    const ride = await Ride.findById(id);
+
+    if (!ride) {
+      return res.status(404).json({
+        success: false,
+        error: `Ride not found with ID ${id}`,
+      });
+    }
+
+    // Check if user is owner or approved participant
+    const isOwner = ride.owner.id.toString() === userId.toString();
+    const isApprovedParticipant = ride.participants.some(
+      (p) => p.user.toString() === userId.toString() && p.isApproved,
+    );
+
+    if (!isOwner && !isApprovedParticipant) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied: not owner or approved participant',
+      });
+    }
+
+    // Get tracking data for the current user
+    const trackingData = await RideTracking.findOne({
+      ride: id,
+      user: userId,
+    });
+
+    if (!trackingData) {
+      return res.status(404).json({
+        success: false,
+        error: 'No tracking data found for this ride',
+      });
+    }
+
+    // Prepare response data
+    const responseData = {
+      ride: {
+        id: ride.id,
+        rideId: ride.rideId,
+        name: ride.name,
+        status: ride.status,
+        startTime: ride.startTime,
+        endTime: ride.endTime,
+        owner: ride.owner,
+      },
+      tracking: {
+        trackingStatus: trackingData.trackingStatus,
+        startTime: trackingData.startTime,
+        endTime: trackingData.endTime,
+        lastKnownPosition: trackingData.lastKnownPosition,
+        calculatedStats: trackingData.calculatedStats,
+        path: trackingData.path,
+        totalPoints: trackingData.path.length,
+        lastUpdated: trackingData.updatedAt,
+      },
+    };
+
+    res.status(200).json({
+      success: true,
+      data: responseData,
+    });
+  } catch (err) {
+    console.error('Error getting ride tracking data:', err);
+    if (err.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid ride ID format',
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: 'Server Error getting ride tracking data',
+    });
+  }
+}
+
 module.exports = {
   createRide,
   getRides,
@@ -1604,4 +1905,6 @@ module.exports = {
   startRide,
   completeRide,
   cancelRide,
+  getRideTracking,
+  updateLocationTracking,
 };

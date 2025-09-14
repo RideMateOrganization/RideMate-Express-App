@@ -72,6 +72,29 @@ const RideParticipantSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Motorcycle ride statistics for this participant
+    rideStats: {
+      totalDistance: {
+        type: Number, // in meters
+        default: 0,
+        min: 0,
+      },
+      averageSpeed: {
+        type: Number, // in m/s
+        default: 0,
+        min: 0,
+      },
+      maxSpeed: {
+        type: Number, // in m/s
+        default: 0,
+        min: 0,
+      },
+      totalDuration: {
+        type: Number, // in seconds
+        default: 0,
+        min: 0,
+      },
+    },
   },
   { _id: false },
 );
@@ -140,6 +163,41 @@ const RideSchema = new mongoose.Schema(
     createdAt: {
       type: Date,
       default: Date.now,
+    },
+    // Ride-level statistics (aggregated from all participants)
+    rideStats: {
+      totalDistance: {
+        type: Number, // in meters
+        default: 0,
+        min: 0,
+      },
+      averageSpeed: {
+        type: Number, // in m/s
+        default: 0,
+        min: 0,
+      },
+      maxSpeed: {
+        type: Number, // in m/s
+        default: 0,
+        min: 0,
+      },
+      totalDuration: {
+        type: Number, // in seconds
+        default: 0,
+        min: 0,
+      },
+      // Ride completion metrics
+      completionRate: {
+        type: Number, // percentage of participants who completed the ride
+        default: 0,
+        min: 0,
+        max: 100,
+      },
+      averageParticipantDistance: {
+        type: Number, // in meters
+        default: 0,
+        min: 0,
+      },
     },
   },
   { timestamps: true },

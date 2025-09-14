@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const pusher = require('../utils/pusher');
 const Ride = require('../models/ride');
 const RideTracking = require('../models/ride-tracking');
+const { calculateRideStats } = require('../utils/ride-stats-calculator');
 
 // @desc    Authenticate Pusher channel
 // @route   POST /api/v1/pusher/auth
@@ -106,8 +107,8 @@ async function handlePusherWebhook(req, res) {
           );
           return;
         }
-        // 3. Save location to MongoDB
-        await RideTracking.findOneAndUpdate(
+        // 3. Save location to MongoDB and calculate statistics
+        const updatedTracking = await RideTracking.findOneAndUpdate(
           { ride: rideId, user: userId },
           {
             $push: {
@@ -119,10 +120,18 @@ async function handlePusherWebhook(req, res) {
                 },
               },
             },
+            $set: {
+              lastKnownPosition: {
+                type: 'Point',
+                coordinates: [Number(longitude), Number(latitude)],
+                timestamp: new Date(),
+              },
+            },
             $setOnInsert: {
               ride: rideId,
               user: userId,
               trackingStatus: 'active',
+              startTime: new Date(),
             },
           },
           {
@@ -132,6 +141,16 @@ async function handlePusherWebhook(req, res) {
             runValidators: true, // Run schema validators
           },
         );
+
+        if (updatedTracking && updatedTracking.path.length > 0) {
+          const stats = calculateRideStats(updatedTracking.path);
+          await RideTracking.findByIdAndUpdate(updatedTracking.id, {
+            $set: {
+              calculatedStats: stats,
+            },
+          });
+        }
+
         console.log(`Location updated for user ${userId} on ride ${rideId}`);
       } catch (parseError) {
         console.error('Error parsing location update data:', parseError);
@@ -165,15 +184,19 @@ async function handlePusherWebhook(req, res) {
           return;
         }
 
-        // Update tracking status in MongoDB
+        // Update tracking status and finalize statistics in MongoDB
         await RideTracking.findOneAndUpdate(
           { ride: rideId, user: userId },
-          { $set: { trackingStatus: 'stopped' } },
+          {
+            $set: {
+              trackingStatus: 'completed',
+              endTime: new Date(),
+            },
+          },
           { new: true, runValidators: true },
         );
-        console.log(
-          `Tracking status set to stopped for user ${userId} on ride ${rideId}`,
-        );
+
+        console.log(`Tracking completed for user ${userId} on ride ${rideId}`);
       } catch (parseError) {
         console.error('Error parsing stop tracking data:', parseError);
         // Skip this event by not executing the rest of the logic
