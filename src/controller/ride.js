@@ -362,33 +362,10 @@ async function getRide(req, res) {
         : 0,
     };
 
-    // Fetch tracked route for the current user
-    let userTrackedRoute = null;
-    if (req.user && req.user.id) {
-      try {
-        const trackingData = await RideTracking.findOne({
-          ride: req.params.id,
-          user: req.user.id,
-        });
-
-        if (trackingData) {
-          userTrackedRoute = {
-            path: trackingData.path,
-            trackingStatus: trackingData.trackingStatus,
-            lastUpdated: trackingData.updatedAt,
-          };
-        }
-      } catch (trackingErr) {
-        console.error('Error fetching user tracking data:', trackingErr);
-        // Don't fail the entire request if tracking data fetch fails
-      }
-    }
-
     // Prepare response data
     const responseData = {
       ...ride.toObject(),
       participants: organizedParticipants,
-      userTrackedRoute,
     };
 
     res.status(200).json({
@@ -1705,6 +1682,14 @@ async function updateLocationTracking(req, res) {
       return res.status(404).json({
         success: false,
         error: `Ride not found with ID ${rideId}`,
+      });
+    }
+
+    // Check if ride is still active
+    if (ride.status !== 'active') {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot update location. Ride status is '${ride.status}'. Only active rides can be tracked.`,
       });
     }
 

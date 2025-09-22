@@ -7,7 +7,7 @@ router.use('/users', require('./users'));
 router.use('/rides', require('./ride'));
 router.use('/ride-requests', require('./ride-requests'));
 router.use('/devices', require('./user-devices'));
-router.use('/pusher', require('./pusher'));
+router.use('/realtime', require('./realtime'));
 
 router.get('/', (req, res) => {
   res.send('Roadmate API - Version 1');

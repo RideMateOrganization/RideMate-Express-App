@@ -35,4 +35,11 @@ app.use((req, res) => {
 
 app.listen(PORT, console.info(`Server running in ${env} mode on port ${PORT}`));
 
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received. Shutting down Express server.');
+  app.close(() => {
+    process.exit(0);
+  });
+});
+
 module.exports = app;
