@@ -175,6 +175,65 @@ async function verifyOTP(req, res) {
   }
 }
 
+// @desc Google OAuth login
+// @route POST /api/v1/auth/google-login
+// @access Public
+// @body { data: { user: { name: string, email: string, photo?: string, givenName?: string, familyName?: string, id?: string }, idToken?: string, scopes?: string[] } }
+// This endpoint receives Google user info from frontend and creates/authenticates user
+async function googleLogin(req, res) {
+  try {
+    const { data } = req.body;
+    console.log(req.body, '***');
+
+    // Validate required fields
+    if (!data || !data.user || !data.user.name || !data.user.email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name and email are required',
+      });
+    }
+
+    const { name, email, photo } = data.user;
+
+    // Check if user already exists
+    let user = await User.findOne({ email });
+
+    if (user) {
+      // User exists, send token response
+      sendTokenResponse(user, 200, res);
+    } else {
+      // Create new user
+      const handle = `@${name.toLowerCase().replace(/\s+/g, '')}_${Math.random().toString(36).substring(2, 6)}`;
+
+      user = await User.create({
+        name,
+        email,
+        image: photo || 'https://placehold.co/100x100',
+        handle,
+        isPhoneVerified: false, // Google users don't have phone verification initially
+      });
+
+      sendTokenResponse(user, 201, res);
+    }
+  } catch (error) {
+    console.error('Google login error:', error);
+
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyValue)[0];
+      return res.status(400).json({
+        success: false,
+        error: `A user with this ${field} already exists`,
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Error during Google authentication',
+    });
+  }
+}
+
 // @desc Logout user / Revoke token
 // @route POST /api/v1/auth/logout
 // @access Private
@@ -198,4 +257,11 @@ async function logout(req, res) {
   }
 }
 
-module.exports = { register, login, requestOTP, verifyOTP, logout };
+module.exports = {
+  register,
+  login,
+  requestOTP,
+  verifyOTP,
+  googleLogin,
+  logout,
+};

@@ -64,14 +64,15 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
       unique: true,
-      required: [true, 'Please provide the phone number'],
+      sparse: true, // Allows multiple null values for unique constraint
+      required: false,
       match: [/^(\+\d{1,3}[- ]?)?\d{10}$/, 'Please add a valid phone number'],
       default: '',
     },
     phoneCountryCode: {
       type: String,
       trim: true,
-      required: [true, 'Please provide the phone country code'],
+      required: false,
       match: [
         /^\+\d{1,4}$/,
         "Phone country code must start with '+' followed by 1 to 4 digits.",
