@@ -21,11 +21,47 @@ app.use(compression());
 if (env === 'development') {
   app.use(morgan('dev'));
 }
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://ridematefe.com',
+      'https://www.ridematefe.com',
+      'ridematefe://',
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+  }),
+);
 app.use(express.json());
 app.use(connectToDatabase);
 
 app.use('/api/v1', v1Routes);
+
+// Debug endpoint to test authentication
+app.get('/api/debug/auth', async (req, res) => {
+  try {
+    const { fromNodeHeaders } = await import('better-auth/node');
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
+
+    res.json({
+      hasSession: !!session,
+      session: session,
+      headers: {
+        cookie: req.headers.cookie,
+        origin: req.headers.origin,
+        referer: req.headers.referer,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/', (req, res) => {
   res.send('Ridemate API is running...');
 });

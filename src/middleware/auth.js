@@ -5,9 +5,22 @@ import auth from '../lib/auth.js';
 // @route Private - Only for logged in users
 async function protect(req, res, next) {
   try {
+    // Debug logging
+    console.log('Auth middleware - Headers:', {
+      cookie: req.headers.cookie,
+      origin: req.headers.origin,
+      referer: req.headers.referer,
+      userAgent: req.headers['user-agent'],
+    });
+
     const session = await auth.api.getSession({
       headers: fromNodeHeaders(req.headers),
     });
+
+    console.log(
+      'Auth middleware - Session result:',
+      session ? 'Session found' : 'No session',
+    );
 
     if (!session) {
       return res.status(401).json({
