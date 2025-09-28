@@ -48,20 +48,6 @@ const auth = betterAuth({
       maxAge: 5 * 60,
     },
   },
-  advanced: {
-    crossSubDomainCookies: {
-      enabled: true,
-    },
-    crossOriginCookies: {
-      enabled: true,
-    },
-    useSecureCookies: process.env.NODE_ENV === 'production',
-    defaultCookieAttributes: {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    },
-  },
   databaseHooks: {
     user: {
       create: {
