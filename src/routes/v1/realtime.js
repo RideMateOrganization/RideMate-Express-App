@@ -1,9 +1,9 @@
 // routes/realtimeRoutes.js
-const express = require('express');
-const { handlePusherWebhook } = require('../../controller/realtime');
+import express from 'express';
+import { handlePusherWebhook } from '../../controller/realtime.js';
 
 const router = express.Router();
 
 router.post('/webhook', handlePusherWebhook);
 
-module.exports = router;
+export default router;

@@ -1,17 +1,22 @@
-const express = require('express');
+import express from 'express';
+
+import userRoutes from './users.js';
+import rideRoutes from './ride.js';
+import rideRequestRoutes from './ride-requests.js';
+import deviceRoutes from './user-devices.js';
+import realtimeRoutes from './realtime.js';
+import privacyPolicyRoutes from './privacy-policy.js';
 
 const router = express.Router();
-
-router.use('/auth', require('./auth'));
-router.use('/users', require('./users'));
-router.use('/rides', require('./ride'));
-router.use('/ride-requests', require('./ride-requests'));
-router.use('/devices', require('./user-devices'));
-router.use('/realtime', require('./realtime'));
-router.use('/privacy-policy', require('./privacy-policy'));
+router.use('/users', userRoutes);
+router.use('/rides', rideRoutes);
+router.use('/ride-requests', rideRequestRoutes);
+router.use('/devices', deviceRoutes);
+router.use('/realtime', realtimeRoutes);
+router.use('/privacy-policy', privacyPolicyRoutes);
 
 router.get('/', (req, res) => {
   res.send('Roadmate API - Version 1');
 });
 
-module.exports = router;
+export default router;

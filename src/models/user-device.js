@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const UserDeviceSchema = new mongoose.Schema(
   {
@@ -68,4 +68,4 @@ UserDeviceSchema.statics.deactivateAllDevicesForUser = function (userId) {
   return this.updateMany({ user: userId }, { isActive: false });
 };
 
-module.exports = mongoose.model('UserDevice', UserDeviceSchema);
+export default mongoose.model('UserDevice', UserDeviceSchema);

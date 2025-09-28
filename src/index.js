@@ -1,16 +1,21 @@
-const express = require('express');
-const dotenv = require('dotenv');
-const cors = require('cors');
-const morgan = require('morgan');
-const compression = require('compression');
+import express from 'express';
+import dotenv from 'dotenv';
+import cors from 'cors';
+import morgan from 'morgan';
+import compression from 'compression';
+import { toNodeHandler } from 'better-auth/node';
 
-const connectToDatabase = require('./middleware/connect-db');
+import connectToDatabase from './middleware/connect-db.js';
+import auth from './lib/auth.js';
+import v1Routes from './routes/v1/index.js';
 
 dotenv.config({ path: './.env', quiet: true });
 const env = process.env.NODE_ENV || 'development';
 const PORT = process.env.PORT || 5000;
 
 const app = express();
+
+app.all('/api/auth/*splat', toNodeHandler(auth));
 
 app.use(compression());
 if (env === 'development') {
@@ -19,8 +24,6 @@ if (env === 'development') {
 app.use(cors());
 app.use(express.json());
 app.use(connectToDatabase);
-
-const v1Routes = require('./routes/v1');
 
 app.use('/api/v1', v1Routes);
 app.get('/', (req, res) => {
@@ -42,4 +45,4 @@ process.on('SIGTERM', () => {
   });
 });
 
-module.exports = app;
+export default app;

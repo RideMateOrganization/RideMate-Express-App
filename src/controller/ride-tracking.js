@@ -1,5 +1,5 @@
-const RideTracking = require('../models/ride-tracking');
-const Ride = require('../models/ride');
+import RideTracking from '../models/ride-tracking.js';
+import Ride from '../models/ride.js';
 
 // @desc Get travelled route for a ride by current user
 // @route GET /api/v1/ride-tracking/:rideId/route
@@ -111,7 +111,4 @@ async function getAllTrackingData(req, res) {
   }
 }
 
-module.exports = {
-  getTravelledRoute,
-  getAllTrackingData,
-};
+export { getTravelledRoute, getAllTrackingData };

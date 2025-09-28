@@ -1,5 +1,5 @@
-const Ride = require('../models/ride');
-const RideImage = require('../models/ride-images');
+import Ride from '../models/ride.js';
+import RideImage from '../models/ride-images.js';
 
 // @desc    Upload images for a ride
 // @route   POST /api/v1/rides/:id/images
@@ -186,8 +186,4 @@ async function deleteRideImage(req, res) {
   }
 }
 
-module.exports = {
-  uploadRideImage,
-  getRideImages,
-  deleteRideImage,
-};
+export { uploadRideImage, getRideImages, deleteRideImage };

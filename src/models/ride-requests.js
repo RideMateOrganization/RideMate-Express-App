@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const RideRequestSchema = new mongoose.Schema(
   {
@@ -46,4 +46,4 @@ RideRequestSchema.index({ ride: 1, user: 1, status: 1 }, { unique: true });
 RideRequestSchema.index({ ride: 1, status: 'pending' });
 RideRequestSchema.index({ user: 1, status: 1 });
 
-module.exports = mongoose.model('RideRequest', RideRequestSchema);
+export default mongoose.model('RideRequest', RideRequestSchema);

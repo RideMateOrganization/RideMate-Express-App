@@ -1,4 +1,4 @@
-const { Expo } = require('expo-server-sdk');
+import { Expo } from 'expo-server-sdk';
 
 const expo = new Expo();
 
@@ -80,4 +80,4 @@ const sendPushNotification = async (
   return { tickets, invalidTokens };
 };
 
-module.exports = { sendPushNotification };
+export { sendPushNotification };

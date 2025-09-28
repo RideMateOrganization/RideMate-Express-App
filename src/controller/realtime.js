@@ -1,8 +1,8 @@
 // controllers/realtimeController.js
-const mongoose = require('mongoose');
-const Ride = require('../models/ride');
-const RideTracking = require('../models/ride-tracking');
-const { calculateRideStats } = require('../utils/ride-stats-calculator');
+import mongoose from 'mongoose';
+import Ride from '../models/ride.js';
+import RideTracking from '../models/ride-tracking.js';
+import { calculateRideStats } from '../utils/ride-stats-calculator.js';
 
 async function handlePusherWebhook(req, res) {
   const webhookData = req.body;
@@ -163,6 +163,4 @@ async function handlePusherWebhook(req, res) {
   res.status(200).send('Webhook received and processed');
 }
 
-module.exports = {
-  handlePusherWebhook,
-};
+export { handlePusherWebhook };

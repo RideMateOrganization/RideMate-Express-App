@@ -1,6 +1,6 @@
-const RideComment = require('../models/ride-comments');
-const Ride = require('../models/ride');
-const User = require('../models/user');
+import RideComment from '../models/ride-comments.js';
+import Ride from '../models/ride.js';
+import { UserProfile } from '../models/user.js';
 
 // @desc    Add a comment to a ride
 // @route   POST /api/v1/rides/:rideId/comments
@@ -61,7 +61,7 @@ async function addComment(req, res) {
     });
 
     // Populate user details
-    await comment.populate('user', 'name handle profileImage');
+    await comment.populate('user', 'handle');
 
     res.status(201).json({
       success: true,
@@ -138,7 +138,7 @@ async function getComments(req, res) {
 
     // Get comments with pagination
     const comments = await RideComment.find(filter)
-      .populate('user', 'name handle image')
+      .populate('user', 'handle')
       .populate('parentComment')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -223,7 +223,7 @@ async function updateComment(req, res) {
     await comment.save();
 
     // Populate user details
-    await comment.populate('user', 'name handle profileImage');
+    await comment.populate('user', 'handle');
 
     res.status(200).json({
       success: true,
@@ -312,7 +312,7 @@ async function getComment(req, res) {
 
     // Find the comment
     const comment = await RideComment.findById(commentId)
-      .populate('user', 'name handle profileImage')
+      .populate('user', 'handle')
       .populate('parentComment');
 
     if (!comment) {
@@ -345,7 +345,7 @@ async function getComment(req, res) {
 
     // Get replies to this comment
     const replies = await RideComment.find({ parentComment: commentId })
-      .populate('user', 'name handle profileImage')
+      .populate('user', 'handle')
       .sort({ createdAt: 1 });
 
     // Add like status for current user to main comment
@@ -544,9 +544,7 @@ async function getCommentLikes(req, res) {
     // Populate user details for the likes
     const populatedLikes = await Promise.all(
       likes.map(async (like) => {
-        const user = await User.findById(like.user).select(
-          'name handle profileImage',
-        );
+        const user = await UserProfile.findById(like.user).select('handle');
         return {
           user,
           likedAt: like.likedAt,
@@ -587,7 +585,7 @@ async function getCommentLikes(req, res) {
   }
 }
 
-module.exports = {
+export {
   addComment,
   getComments,
   updateComment,

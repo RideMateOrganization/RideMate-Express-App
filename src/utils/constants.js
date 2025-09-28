@@ -3,4 +3,4 @@ const RideVisibility = {
   PRIVATE: 'private',
 };
 
-module.exports = { RideVisibility };
+export { RideVisibility };

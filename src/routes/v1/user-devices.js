@@ -1,11 +1,11 @@
-const express = require('express');
-const { protect } = require('../../middleware/auth');
-const {
+import express from 'express';
+import protect from '../../middleware/auth.js';
+import {
   registerDevice,
   getUserDevices,
   deactivateDevice,
   deactivateAllDevices,
-} = require('../../controller/user-device');
+} from '../../controller/user-device.js';
 
 const router = express.Router();
 
@@ -18,4 +18,4 @@ router
   .delete(deactivateAllDevices);
 router.route('/:pushToken').delete(deactivateDevice);
 
-module.exports = router;
+export default router;

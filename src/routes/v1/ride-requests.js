@@ -1,11 +1,11 @@
-const express = require('express');
-const { protect } = require('../../middleware/auth');
-const {
+import express from 'express';
+import protect from '../../middleware/auth.js';
+import {
   getPendingRequests,
   approveRejectRequest,
   getMyRequests,
   deleteRideRequest,
-} = require('../../controller/ride');
+} from '../../controller/ride.js';
 
 const router = express.Router();
 
@@ -18,4 +18,4 @@ router
   .post(approveRejectRequest)
   .delete(deleteRideRequest);
 
-module.exports = router;
+export default router;

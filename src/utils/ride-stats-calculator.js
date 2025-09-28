@@ -252,7 +252,7 @@ function calculateAggregatedRideStats(participantStats) {
   return aggregated;
 }
 
-module.exports = {
+export {
   calculateDistance,
   calculateSpeed,
   calculateAcceleration,

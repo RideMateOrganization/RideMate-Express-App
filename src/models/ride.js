@@ -1,5 +1,5 @@
-const mongoose = require('mongoose');
-const { RideVisibility } = require('../utils/constants');
+import mongoose from 'mongoose';
+import { RideVisibility } from '../utils/constants.js';
 
 const AddressSchema = new mongoose.Schema(
   {
@@ -229,4 +229,4 @@ RideSchema.index({ owner: 1 });
 RideSchema.index({ plannedRoute: 1 });
 RideSchema.index({ 'participants.user': 1 });
 
-module.exports = mongoose.model('Ride', RideSchema);
+export default mongoose.model('Ride', RideSchema);

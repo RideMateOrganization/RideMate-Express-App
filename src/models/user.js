@@ -1,25 +1,12 @@
-const bcrypt = require('bcryptjs');
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema(
   {
-    name: {
+    authId: {
       type: String,
-      trim: true,
-    },
-    email: {
-      type: String,
+      required: true,
       unique: true,
-      sparse: true,
-      match: [
-        /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/,
-        'Please add a valid email',
-      ],
-    },
-    password: {
-      type: String,
-      minlength: [6, 'Password must be at least 6 characters long'],
-      select: false,
+      index: true,
     },
     handle: {
       type: String,
@@ -31,10 +18,6 @@ const userSchema = new mongoose.Schema(
       ],
       minlength: [8, 'Handle must be at least 8 characters long'],
       maxlength: [20, 'Handle cannot be more than 20 characters long'],
-    },
-    image: {
-      type: String,
-      default: 'https://placehold.co/100x100',
     },
     bio: {
       type: String,
@@ -91,19 +74,34 @@ const userSchema = new mongoose.Schema(
   },
 );
 
-// Hash password before saving
-userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) {
-    return next();
-  }
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
-  next();
-});
-
-// Match user entered password to hashed password in database
-userSchema.methods.matchPassword = async function (enteredPassword) {
-  return bcrypt.compare(enteredPassword, this.password);
+userSchema.statics.findByAuthId = function (authId) {
+  return this.findOne({ authId });
 };
 
-module.exports = mongoose.model('User', userSchema);
+userSchema.methods.syncWithBetterAuth = function () {
+  return this.save();
+};
+
+const betterAuthUserSchema = new mongoose.Schema(
+  {
+    id: { type: String, required: true, unique: true },
+    name: { type: String },
+    email: { type: String, required: true, unique: true },
+    image: { type: String },
+    emailVerified: { type: Boolean, default: false },
+    phoneNumber: { type: String },
+    phoneNumberVerified: { type: Boolean, default: false },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  {
+    collection: 'user',
+    timestamps: true,
+    strict: false,
+  },
+);
+
+const User = mongoose.model('User', betterAuthUserSchema);
+const UserProfile = mongoose.model('UserProfile', userSchema);
+
+export { User, UserProfile };

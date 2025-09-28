@@ -1,22 +1,37 @@
-const User = require('../models/user');
+import { UserProfile } from '../models/user.js';
 
 // @desc Get current user
 // @route GET /api/v1/users/me
 // @access Private - Only for logged in users
 async function getUser(req, res) {
   try {
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({
+    // Check if the authenticated user exists
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
         success: false,
-        error: 'User not found',
+        error: 'User not authenticated',
       });
     }
+
+    const userProfile = await UserProfile.findByAuthId(req.user.id);
+    if (!userProfile) {
+      return res.status(404).json({
+        success: false,
+        error: 'User profile not found. Please contact support.',
+      });
+    }
+
+    const combinedUser = {
+      ...req.user,
+      ...userProfile.toObject(),
+    };
+
     res.status(200).json({
       success: true,
-      data: user,
+      data: combinedUser,
     });
   } catch (error) {
+    console.error('Error getting user:', error);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -29,16 +44,25 @@ async function getUser(req, res) {
 // @access Private - Only for logged in users
 async function getUserById(req, res) {
   try {
-    const user = await User.findById(req.params.id);
-    if (!user) {
+    const { id } = req.params;
+
+    // Find user profile by authId
+    const userProfile = await UserProfile.findByAuthId(id);
+    if (!userProfile) {
       return res.status(404).json({
         success: false,
         error: 'User not found',
       });
     }
+
+    const combinedUser = {
+      id: userProfile.authId,
+      ...userProfile.toObject(),
+    };
+
     res.status(200).json({
       success: true,
-      data: user,
+      data: combinedUser,
     });
   } catch (error) {
     res.status(500).json({
@@ -53,12 +77,9 @@ async function getUserById(req, res) {
 // @access Private - Only for logged in users
 async function updateUser(req, res) {
   try {
-    // Fields that can be updated
+    // Fields that can be updated (only UserProfile fields, not Better Auth fields)
     const allowedUpdates = [
-      'name',
-      'email',
       'handle',
-      'image',
       'bio',
       'gender',
       'dob',
@@ -84,11 +105,15 @@ async function updateUser(req, res) {
       });
     }
 
-    // Find and update the user
-    const user = await User.findByIdAndUpdate(req.user.id, updates, {
-      new: true,
-      runValidators: true,
-    });
+    // Find and update the user using authId from Better Auth session
+    const user = await UserProfile.findOneAndUpdate(
+      { authId: req.user.id },
+      updates,
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
 
     if (!user) {
       return res.status(404).json({
@@ -97,9 +122,14 @@ async function updateUser(req, res) {
       });
     }
 
+    const combinedUser = {
+      ...req.user,
+      ...user.toObject(),
+    };
+
     res.status(200).json({
       success: true,
-      data: user,
+      data: combinedUser,
       message: 'User details updated successfully',
     });
   } catch (error) {
@@ -128,4 +158,4 @@ async function updateUser(req, res) {
   }
 }
 
-module.exports = { getUser, getUserById, updateUser };
+export { getUser, getUserById, updateUser };

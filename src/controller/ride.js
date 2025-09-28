@@ -1,19 +1,17 @@
-const { Types } = require('mongoose');
-const mongoose = require('mongoose');
-const { v4: uuidv4 } = require('uuid');
+import mongoose, { Types } from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 
-const Ride = require('../models/ride');
-const RideRequest = require('../models/ride-requests');
-const RideTracking = require('../models/ride-tracking');
-const UserDevice = require('../models/user-device');
-
-const { RideVisibility } = require('../utils/constants');
-const { sendPushNotification } = require('../utils/expo-push-manager');
-const {
+import Ride from '../models/ride.js';
+import RideRequest from '../models/ride-requests.js';
+import RideTracking from '../models/ride-tracking.js';
+import UserDevice from '../models/user-device.js';
+import { RideVisibility } from '../utils/constants.js';
+import { sendPushNotification } from '../utils/expo-push-manager.js';
+import {
   updateRideStats,
   updateParticipantStats,
-} = require('../utils/ride-stats-updater');
-const { calculateRideStats } = require('../utils/ride-stats-calculator');
+} from '../utils/ride-stats-updater.js';
+import { calculateRideStats } from '../utils/ride-stats-calculator.js';
 
 // Create a new ride
 // @route POST /api/rides
@@ -277,8 +275,8 @@ async function getRides(req, res) {
     const totalPages = Math.ceil(totalRides / limitNum);
 
     const rides = await Ride.find(filterObj)
-      .populate('owner', 'name handle profileImage email')
-      .populate('participants.user', 'name handle profileImage email')
+      .populate('owner', 'name email image')
+      .populate('participants.user', 'name email image')
       .sort(sortObj)
       .skip(skip)
       .limit(limitNum);
@@ -339,9 +337,7 @@ async function getRides(req, res) {
 // @access  Public
 async function getRide(req, res) {
   try {
-    const ride = await Ride.findById(req.params.id)
-      .populate('owner', 'name handle profileImage email')
-      .populate('participants.user', 'name handle profileImage email');
+    const ride = await Ride.findById(req.params.id);
 
     if (!ride) {
       return res.status(404).json({
@@ -482,7 +478,7 @@ async function joinRide(req, res) {
             rideId: ride.id,
             rideName: ride.name,
             requesterName: req.user.name,
-            requesterId: req.user.id,
+            requesterId: userId,
           },
         );
       }
@@ -589,7 +585,7 @@ async function getPendingRequests(req, res) {
       status: 'pending',
     })
       .populate('ride', 'name rideId startTime')
-      .populate('user', 'name handle profileImage email')
+      .populate('user', 'handle')
       .sort({ requestedAt: -1 });
 
     // Group requests by ride
@@ -647,7 +643,7 @@ async function approveRejectRequest(req, res) {
     // Find the request and populate ride details
     const request = await RideRequest.findById(requestId)
       .populate('ride')
-      .populate('user', 'name handle profileImage');
+      .populate('user', 'handle');
 
     if (!request) {
       return res
@@ -708,7 +704,7 @@ async function approveRejectRequest(req, res) {
 
       // Add user to ride participants
       ride.participants.push({
-        user: request.user.id,
+        user: new Types.ObjectId(request.user.id),
         joinedAt: new Date(),
         role: 'member',
         isApproved: true,
@@ -823,7 +819,7 @@ async function getMyRequests(req, res) {
         path: 'ride',
         populate: {
           path: 'owner',
-          select: 'name handle profileImage email phoneCountryCode phone',
+          select: 'handle phoneCountryCode phone',
         },
       })
       .sort({ createdAt: -1 });
@@ -880,7 +876,7 @@ async function deleteRideRequest(req, res) {
     // Find the request
     const request = await RideRequest.findById(requestId)
       .populate('ride', 'name rideId owner')
-      .populate('user', 'name handle');
+      .populate('user', 'handle');
 
     if (!request) {
       return res.status(404).json({
@@ -969,7 +965,7 @@ async function getRideParticipants(req, res) {
     // Check if user is owner or approved participant
     const isOwner = ride.owner.toString() === userId.toString();
     const isApprovedParticipant = ride.participants.some(
-      (p) => p.user.id === userId && p.isApproved,
+      (p) => p.user.toString() === userId.toString() && p.isApproved,
     );
 
     if (!isOwner && !isApprovedParticipant) {
@@ -1210,8 +1206,8 @@ async function getNearbyRides(req, res) {
 
     // Find nearby rides with pagination
     const rides = await Ride.find(filterObj)
-      .populate('owner', 'name handle profileImage email')
-      .populate('participants.user', 'name handle profileImage email')
+      .populate('owner', 'name email image')
+      .populate('participants.user', 'name email image')
       .sort({ startTime: 1 })
       .skip(skip)
       .limit(limitNum);
@@ -1284,7 +1280,7 @@ async function startRide(req, res) {
     }
 
     // Check if the user is the owner of the ride
-    if (ride.owner.toString() !== userId.toString()) {
+    if (ride.owner !== userId) {
       return res.status(403).json({
         success: false,
         error: 'Only the ride owner can start the ride',
@@ -1399,7 +1395,7 @@ async function completeRide(req, res) {
     }
 
     // Check if the user is the owner of the ride
-    if (ride.owner.toString() !== userId.toString()) {
+    if (ride.owner !== userId) {
       return res.status(403).json({
         success: false,
         error: 'Only the ride owner can complete the ride',
@@ -1533,7 +1529,7 @@ async function cancelRide(req, res) {
     }
 
     // Check if the user is the owner of the ride
-    if (ride.owner.toString() !== userId.toString()) {
+    if (ride.owner !== userId) {
       return res.status(403).json({
         success: false,
         error: 'Only the ride owner can cancel the ride',
@@ -1661,7 +1657,6 @@ async function updateLocationTracking(req, res) {
       });
     }
 
-    // Validate ObjectIds
     if (!mongoose.Types.ObjectId.isValid(rideId)) {
       return res.status(400).json({
         success: false,
@@ -1669,7 +1664,7 @@ async function updateLocationTracking(req, res) {
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
         success: false,
         error: 'Invalid user ID format',
@@ -1807,7 +1802,7 @@ async function getRideTracking(req, res) {
     }
 
     // Check if user is owner or approved participant
-    const isOwner = ride.owner.id.toString() === userId.toString();
+    const isOwner = ride.owner.toString() === userId.toString();
     const isApprovedParticipant = ride.participants.some(
       (p) => p.user.toString() === userId.toString() && p.isApproved,
     );
@@ -1874,7 +1869,7 @@ async function getRideTracking(req, res) {
   }
 }
 
-module.exports = {
+export {
   createRide,
   getRides,
   getRide,

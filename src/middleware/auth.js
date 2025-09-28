@@ -1,39 +1,33 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/user');
-const { isTokenBlacklisted } = require('../utils/auth');
+import { fromNodeHeaders } from 'better-auth/node';
+import auth from '../lib/auth.js';
 
 // @desc Protect routes
 // @route Private - Only for logged in users
 async function protect(req, res, next) {
-  let token;
-
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
-    [, token] = req.headers.authorization.split(' ');
-  }
-
-  if (!token) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-
-  // Check if token is blacklisted
-  const isBlacklisted = await isTokenBlacklisted(token);
-  if (isBlacklisted) {
-    return res
-      .status(401)
-      .json({ success: false, message: 'Token has been revoked' });
-  }
-
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = await User.findById(decoded.id);
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
+
+    if (!session) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized - No valid session found',
+      });
+    }
+
+    // Add user and session data to request object for use in route handlers
+    req.user = session.user;
+    req.session = session.session;
+
     next();
   } catch (error) {
-    console.error(error);
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
+    console.error('Auth middleware error:', error);
+    return res.status(401).json({
+      success: false,
+      message: 'Unauthorized - Invalid session',
+    });
   }
 }
 
-module.exports = { protect };
+export default protect;

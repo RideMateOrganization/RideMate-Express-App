@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 let cachedDb = null;
 
@@ -10,15 +10,17 @@ async function connectDB() {
   try {
     const conn = await mongoose.connect(process.env.MONGO_URI, {
       maxPoolSize: 10,
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-      bufferCommands: false,
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 60000,
+      connectTimeoutMS: 10000,
+      bufferCommands: true,
     });
 
     cachedDb = conn;
+    return conn;
   } catch (error) {
-    console.error(`Error: ${error.message}`);
-    process.exit(1);
+    console.error(`Database connection error: ${error.message}`);
+    throw error;
   }
 }
 
@@ -45,4 +47,4 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 
-module.exports = { connectDB, disconnectDB };
+export { connectDB, disconnectDB };

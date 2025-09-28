@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const RideCommentSchema = new mongoose.Schema(
   {
@@ -50,4 +50,4 @@ RideCommentSchema.index({ ride: 1, createdAt: -1 });
 RideCommentSchema.index({ 'likes.user': 1 });
 RideCommentSchema.index({ likeCount: -1 });
 
-module.exports = mongoose.model('RideComment', RideCommentSchema);
+export default mongoose.model('RideComment', RideCommentSchema);

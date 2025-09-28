@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const RideRatingSchema = new mongoose.Schema(
   {
@@ -26,4 +26,4 @@ const RideRatingSchema = new mongoose.Schema(
 
 RideRatingSchema.index({ ride: 1, user: 1 }, { unique: true });
 
-module.exports = mongoose.model('RideRating', RideRatingSchema);
+export default mongoose.model('RideRating', RideRatingSchema);

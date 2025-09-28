@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const RideImageSchema = new mongoose.Schema(
   {
@@ -35,4 +35,4 @@ const RideImageSchema = new mongoose.Schema(
 );
 
 const RideImage = mongoose.model('RideImage', RideImageSchema);
-module.exports = RideImage;
+export default RideImage;

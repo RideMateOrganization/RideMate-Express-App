@@ -24,11 +24,14 @@ export default defineConfig([
       },
 
       ecmaVersion: 12,
-      sourceType: 'commonjs',
+      sourceType: 'module',
     },
     ignores: ['eslint.config.mjs', 'node_modules', '.git'],
     rules: {
       'consistent-return': 'off',
+      'import/extensions': 'off',
+      'no-console': 'off',
+      'import/no-unresolved': 'off',
     },
   },
 ]);

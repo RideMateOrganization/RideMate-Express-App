@@ -1,7 +1,7 @@
 require('dotenv').config({ path: './.env', quiet: true });
 const { v4: uuidv4 } = require('uuid');
 const { connectDB, disconnectDB } = require('../config/db');
-const User = require('../models/user');
+const UserProfile = require('../models/user');
 const Ride = require('../models/ride');
 const RideRequest = require('../models/ride-requests');
 const { RideVisibility } = require('../utils/constants');
@@ -397,7 +397,7 @@ async function seedDatabase() {
     console.log('✅ Connected to database');
 
     // Get existing users
-    const users = await User.find({}).select('_id');
+    const users = await UserProfile.find({}).select('_id');
     if (users.length === 0) {
       console.log('❌ No users found in database. Please create users first.');
       return;

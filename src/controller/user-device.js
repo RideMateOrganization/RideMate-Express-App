@@ -1,4 +1,4 @@
-const UserDevice = require('../models/user-device');
+import UserDevice from '../models/user-device.js';
 
 // @desc Register/Update a user device with push token
 // @route POST /api/v1/devices
@@ -120,7 +120,7 @@ async function deactivateAllDevices(req, res) {
   }
 }
 
-module.exports = {
+export {
   registerDevice,
   getUserDevices,
   deactivateDevice,

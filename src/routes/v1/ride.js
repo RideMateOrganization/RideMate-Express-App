@@ -1,6 +1,6 @@
-const express = require('express');
-const { protect } = require('../../middleware/auth');
-const {
+import express from 'express';
+import protect from '../../middleware/auth.js';
+import {
   createRide,
   getRides,
   getRide,
@@ -14,15 +14,15 @@ const {
   cancelRide,
   getRideTracking,
   updateLocationTracking,
-} = require('../../controller/ride');
+} from '../../controller/ride.js';
 
-const {
+import {
   uploadRideImage,
   getRideImages,
   deleteRideImage,
-} = require('../../controller/ride-image');
+} from '../../controller/ride-image.js';
 
-const {
+import {
   addComment,
   getComments,
   updateComment,
@@ -30,12 +30,12 @@ const {
   getComment,
   toggleLike,
   getCommentLikes,
-} = require('../../controller/ride-comments');
+} from '../../controller/ride-comments.js';
 
-const {
+import {
   getTravelledRoute,
   getAllTrackingData,
-} = require('../../controller/ride-tracking');
+} from '../../controller/ride-tracking.js';
 
 const router = express.Router();
 
@@ -69,4 +69,4 @@ router
 router.post('/:rideId/comments/:commentId/like', toggleLike);
 router.get('/:rideId/comments/:commentId/likes', getCommentLikes);
 
-module.exports = router;
+export default router;

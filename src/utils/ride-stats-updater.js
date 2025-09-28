@@ -2,9 +2,9 @@
  * Utility functions for updating ride statistics in the database
  */
 
-const Ride = require('../models/ride');
-const RideTracking = require('../models/ride-tracking');
-const { calculateAggregatedRideStats } = require('./ride-stats-calculator');
+import Ride from '../models/ride.js';
+import RideTracking from '../models/ride-tracking.js';
+import { calculateAggregatedRideStats } from './ride-stats-calculator.js';
 
 /**
  * Update participant statistics in the ride document
@@ -78,7 +78,4 @@ async function updateRideStats(rideId) {
   }
 }
 
-module.exports = {
-  updateParticipantStats,
-  updateRideStats,
-};
+export { updateParticipantStats, updateRideStats };

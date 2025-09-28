@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const RideTrackingSchema = new mongoose.Schema(
   {
@@ -120,4 +120,4 @@ const RideTrackingSchema = new mongoose.Schema(
 
 RideTrackingSchema.index({ ride: 1, user: 1 }, { unique: true });
 
-module.exports = mongoose.model('RideTracking', RideTrackingSchema);
+export default mongoose.model('RideTracking', RideTrackingSchema);

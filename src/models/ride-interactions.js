@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const RideInteractionSchema = new mongoose.Schema(
   {
@@ -28,4 +28,4 @@ RideInteractionSchema.index(
   { unique: true },
 );
 
-module.exports = mongoose.model('RideInteraction', RideInteractionSchema);
+export default mongoose.model('RideInteraction', RideInteractionSchema);
