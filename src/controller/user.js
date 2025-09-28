@@ -1,4 +1,4 @@
-import { UserProfile } from '../models/user.js';
+import { User, UserProfile } from '../models/user.js';
 
 // @desc Get current user
 // @route GET /api/v1/users/me
@@ -13,11 +13,19 @@ async function getUser(req, res) {
       });
     }
 
-    const userProfile = await UserProfile.findByAuthId(req.user.id);
-    if (!userProfile) {
+    // Check if user exists in Better Auth
+    const authUser = await User.findById(req.user.id);
+    if (!authUser) {
       return res.status(404).json({
         success: false,
-        error: 'User profile not found. Please contact support.',
+        error: 'User not found',
+      });
+    }
+
+    let userProfile = await UserProfile.findByAuthId(req.user.id);
+    if (authUser && !userProfile) {
+      userProfile = await UserProfile.create({
+        authId: req.user.id,
       });
     }
 
@@ -105,8 +113,25 @@ async function updateUser(req, res) {
       });
     }
 
-    // Find and update the user using authId from Better Auth session
-    const user = await UserProfile.findOneAndUpdate(
+    // Check if user exists in Better Auth
+    const authUser = await User.findById(req.user.id);
+    if (!authUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Find existing user profile or create one if it doesn't exist
+    let userProfile = await UserProfile.findByAuthId(req.user.id);
+    if (authUser && !userProfile) {
+      userProfile = await UserProfile.create({
+        authId: req.user.id,
+      });
+    }
+
+    // Update the user profile with the provided updates
+    const updatedUser = await UserProfile.findOneAndUpdate(
       { authId: req.user.id },
       updates,
       {
@@ -115,16 +140,9 @@ async function updateUser(req, res) {
       },
     );
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found',
-      });
-    }
-
     const combinedUser = {
       ...req.user,
-      ...user.toObject(),
+      ...updatedUser.toObject(),
     };
 
     res.status(200).json({
