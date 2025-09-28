@@ -5,6 +5,17 @@ let cachedDb = null;
 // @desc Connect to MongoDB with connection pooling
 // @route Public - Anyone can connect to the database
 async function connectDB() {
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
+
+  if (mongoose.connection.readyState === 2) {
+    return new Promise((resolve, reject) => {
+      mongoose.connection.once('connected', () => resolve(mongoose.connection));
+      mongoose.connection.once('error', reject);
+    });
+  }
+
   if (cachedDb) return cachedDb;
 
   try {

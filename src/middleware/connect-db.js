@@ -1,9 +1,30 @@
-import { connectDB } from '../config/db.js';
+import mongoose from 'mongoose';
 
 const connectToDatabase = async (req, res, next) => {
   try {
-    const connection = await connectDB();
-    if (connection && connection.connection.readyState === 1) {
+    if (mongoose.connection.readyState === 1) {
+      next();
+      return;
+    }
+
+    if (mongoose.connection.readyState === 0) {
+      await mongoose.connect(process.env.MONGO_URI, {
+        maxPoolSize: 10,
+        serverSelectionTimeoutMS: 10000,
+        socketTimeoutMS: 60000,
+        connectTimeoutMS: 10000,
+        bufferCommands: true,
+      });
+    }
+
+    if (mongoose.connection.readyState === 2) {
+      await new Promise((resolve, reject) => {
+        mongoose.connection.once('connected', resolve);
+        mongoose.connection.once('error', reject);
+      });
+    }
+
+    if (mongoose.connection.readyState === 1) {
       next();
     } else {
       throw new Error('Database connection not ready');
