@@ -823,7 +823,6 @@ async function getMyRequests(req, res) {
         },
       })
       .sort({ createdAt: -1 });
-    console.log(requests);
 
     // Categorize requests by status
     const categorizedRequests = {

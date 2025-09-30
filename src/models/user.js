@@ -74,11 +74,11 @@ const userSchema = new mongoose.Schema(
   },
 );
 
-userSchema.statics.findByAuthId = function (authId) {
+userSchema.statics.findByAuthId = function findByAuthId(authId) {
   return this.findOne({ authId });
 };
 
-userSchema.methods.syncWithBetterAuth = function () {
+userSchema.methods.syncWithBetterAuth = function syncWithBetterAuth() {
   return this.save();
 };
 
