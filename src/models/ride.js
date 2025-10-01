@@ -200,7 +200,11 @@ const RideSchema = new mongoose.Schema(
       },
     },
   },
-  { timestamps: true },
+  {
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+    timestamps: true,
+  },
 );
 
 // Add owner as a participant if not already present

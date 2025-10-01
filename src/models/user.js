@@ -84,9 +84,8 @@ userSchema.methods.syncWithBetterAuth = function syncWithBetterAuth() {
 
 const betterAuthUserSchema = new mongoose.Schema(
   {
-    id: { type: String, required: true, unique: true },
     name: { type: String },
-    email: { type: String, required: true, unique: true },
+    email: { type: String, unique: true, sparse: true }, // Make email optional and sparse
     image: { type: String },
     emailVerified: { type: Boolean, default: false },
     phoneNumber: { type: String },
@@ -98,8 +97,20 @@ const betterAuthUserSchema = new mongoose.Schema(
     collection: 'user',
     timestamps: true,
     strict: false,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   },
 );
+
+betterAuthUserSchema.virtual('documentId').get(function getDocumentId() {
+  // eslint-disable-next-line no-underscore-dangle
+  return this._id.toHexString();
+});
+
+betterAuthUserSchema.virtual('id').get(function getId() {
+  // eslint-disable-next-line no-underscore-dangle
+  return this._id.toHexString();
+});
 
 const User = mongoose.model('User', betterAuthUserSchema);
 const UserProfile = mongoose.model('UserProfile', userSchema);

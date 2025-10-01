@@ -43,7 +43,11 @@ const RideCommentSchema = new mongoose.Schema(
       default: 0,
     },
   },
-  { timestamps: true },
+  {
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+    timestamps: true,
+  },
 );
 
 RideCommentSchema.index({ ride: 1, createdAt: -1 });

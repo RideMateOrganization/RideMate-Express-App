@@ -31,7 +31,11 @@ const RideImageSchema = new mongoose.Schema(
       default: Date.now,
     },
   },
-  { timestamps: true },
+  {
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+    timestamps: true,
+  },
 );
 
 const RideImage = mongoose.model('RideImage', RideImageSchema);

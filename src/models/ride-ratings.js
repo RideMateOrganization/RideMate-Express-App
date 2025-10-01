@@ -21,7 +21,11 @@ const RideRatingSchema = new mongoose.Schema(
       max: [5, 'Rating cannot be more than 5'],
     },
   },
-  { timestamps: true },
+  {
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+    timestamps: true,
+  },
 );
 
 RideRatingSchema.index({ ride: 1, user: 1 }, { unique: true });

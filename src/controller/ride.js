@@ -643,7 +643,7 @@ async function approveRejectRequest(req, res) {
     // Find the request and populate ride details
     const request = await RideRequest.findById(requestId)
       .populate('ride')
-      .populate('user', 'handle');
+      .populate('user', 'handle _id');
 
     if (!request) {
       return res
@@ -666,18 +666,21 @@ async function approveRejectRequest(req, res) {
       });
     }
 
+    // Use the original user ID from the request document, not the populated user
+    const userId = request.user.id || request.user;
+
     if (action === 'approve') {
       // For approvals, we need to delete existing requests and create a new approved one
       // because approved requests can't coexist with pending ones due to unique constraint
       await RideRequest.deleteMany({
         ride: request.ride.id,
-        user: request.user.id,
+        user: userId,
       });
 
       // Create a new approved request
       const updatedRequest = await RideRequest.create({
         ride: request.ride.id,
-        user: request.user.id,
+        user: userId,
         status: 'approved',
         message: request.message,
         respondedAt: new Date(),
@@ -704,7 +707,7 @@ async function approveRejectRequest(req, res) {
 
       // Add user to ride participants
       ride.participants.push({
-        user: new Types.ObjectId(request.user.id),
+        user: userId,
         joinedAt: new Date(),
         role: 'member',
         isApproved: true,
@@ -714,7 +717,7 @@ async function approveRejectRequest(req, res) {
 
       // Send push notification to the approved user
       const userDevice = await UserDevice.findOne({
-        user: request.user.id,
+        user: userId,
         isActive: true,
       }).sort({ lastSeen: -1 });
 
@@ -764,7 +767,7 @@ async function approveRejectRequest(req, res) {
 
       // Send push notification to the rejected user
       const userDevice = await UserDevice.findOne({
-        user: request.user.id,
+        user: userId,
         isActive: true,
       }).sort({ lastSeen: -1 });
 
@@ -875,7 +878,7 @@ async function deleteRideRequest(req, res) {
     // Find the request
     const request = await RideRequest.findById(requestId)
       .populate('ride', 'name rideId owner')
-      .populate('user', 'handle');
+      .populate('user', 'handle _id');
 
     if (!request) {
       return res.status(404).json({
@@ -885,7 +888,8 @@ async function deleteRideRequest(req, res) {
     }
 
     // Check if user is the one who made the request or the ride owner
-    const isRequestOwner = request.user.id.toString() === userId.toString();
+    const requestUserId = request.user.id || request.user;
+    const isRequestOwner = requestUserId.toString() === userId.toString();
     const isRideOwner = request.ride.owner.toString() === userId.toString();
 
     if (!isRequestOwner && !isRideOwner) {
@@ -900,7 +904,7 @@ async function deleteRideRequest(req, res) {
     if (request.status === 'approved') {
       const ride = await Ride.findById(request.ride.id);
       const isStillParticipant = ride.participants.some(
-        (p) => p.user.toString() === request.user.id.toString(),
+        (p) => p.user.toString() === requestUserId.toString(),
       );
 
       if (isStillParticipant) {
@@ -951,9 +955,10 @@ async function getRideParticipants(req, res) {
     const { id } = req.params;
     const userId = req.user.id;
 
+    // Find the ride with populated participants
     const ride = await Ride.findById(id)
-      .populate('participants.user')
-      .select('name rideId owner participants maxParticipants');
+      .populate('participants.user', 'handle name email _id documentId')
+      .select('name rideId owner participants maxParticipants id');
 
     if (!ride) {
       return res
@@ -961,11 +966,19 @@ async function getRideParticipants(req, res) {
         .json({ success: false, error: `Ride not found with ID ${id}` });
     }
 
-    // Check if user is owner or approved participant
+    // Check if user has access to this ride
     const isOwner = ride.owner.toString() === userId.toString();
-    const isApprovedParticipant = ride.participants.some(
-      (p) => p.user.toString() === userId.toString() && p.isApproved,
-    );
+    const isApprovedParticipant = ride.participants.some((participant) => {
+      // Handle both populated and non-populated user references
+      const { user } = participant;
+      // eslint-disable-next-line no-underscore-dangle
+      const userRef = user?.id || user?._id || user;
+      return (
+        userRef &&
+        userRef.toString() === userId.toString() &&
+        participant.isApproved
+      );
+    });
 
     if (!isOwner && !isApprovedParticipant) {
       return res.status(403).json({
@@ -974,17 +987,21 @@ async function getRideParticipants(req, res) {
       });
     }
 
-    // Get pending requests from RideRequest model
+    // Get pending requests for this ride
     const pendingRequests = await RideRequest.find({
       ride: id,
       status: 'pending',
-    }).populate('user');
+    })
+      .populate('user', 'handle name email _id documentId')
+      .sort({ createdAt: -1 });
 
     // Organize participants by status
     const participants = {
-      owner: ride.participants.find((p) => p.role === 'owner'),
-      approved: ride.participants.filter((p) => p.isApproved),
-      pending: pendingRequests,
+      owner: ride.participants.find((p) => p.role === 'owner')?.toObject(),
+      approved: ride.participants
+        .filter((p) => p.isApproved)
+        .map((p) => p.toObject()),
+      pending: pendingRequests.map((request) => request.toObject()),
       total: ride.participants.length,
       maxParticipants: ride.maxParticipants,
       availableSpots: ride.maxParticipants

@@ -39,7 +39,11 @@ const RideRequestSchema = new mongoose.Schema(
       trim: true,
     },
   },
-  { timestamps: true },
+  {
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+    timestamps: true,
+  },
 );
 
 RideRequestSchema.index({ ride: 1, user: 1, status: 1 }, { unique: true });

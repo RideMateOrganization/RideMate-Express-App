@@ -115,7 +115,11 @@ const RideTrackingSchema = new mongoose.Schema(
       },
     },
   },
-  { timestamps: true },
+  {
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+    timestamps: true,
+  },
 );
 
 RideTrackingSchema.index({ ride: 1, user: 1 }, { unique: true });
