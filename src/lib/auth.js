@@ -29,8 +29,34 @@ const auth = betterAuth({
       allowedAttempts: 3,
       otpLength: 6,
       otpExpiry: 5 * 60, // 5 minutes
-      sendOTP: ({ phoneNumber: number, code }) => {
-        sendOTP(number, code);
+      generateOTP: ({ phoneNumber: number }) => {
+        if (number === process.env.TESTING_PHONE_NUMBER)
+          return process.env.TESTING_OTP;
+        return Math.floor(100000 + Math.random() * 900000).toString();
+      },
+      sendOTP: async ({ phoneNumber: number, code }) => {
+        if (number === process.env.TESTING_PHONE_NUMBER) {
+          try {
+            const database = client.db();
+            const verificationCollection = database.collection('verification');
+            await verificationCollection.updateOne(
+              {
+                identifier: number,
+                expiresAt: { $gt: new Date() },
+              },
+              {
+                $set: {
+                  value: `${process.env.TESTING_OTP}:0`,
+                  updatedAt: new Date(),
+                },
+              },
+            );
+          } catch (error) {
+            console.error('Error updating testing OTP in database:', error);
+          }
+          return Promise.resolve();
+        }
+        return sendOTP(number, code);
       },
       signUpOnVerification: {
         getTempEmail: (number) => `${number}@ridematefe.com`,

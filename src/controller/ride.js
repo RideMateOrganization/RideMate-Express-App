@@ -1296,7 +1296,7 @@ async function startRide(req, res) {
     }
 
     // Check if the user is the owner of the ride
-    if (ride.owner !== userId) {
+    if (ride.owner.toString() !== userId) {
       return res.status(403).json({
         success: false,
         error: 'Only the ride owner can start the ride',
@@ -1411,7 +1411,7 @@ async function completeRide(req, res) {
     }
 
     // Check if the user is the owner of the ride
-    if (ride.owner !== userId) {
+    if (ride.owner.toString() !== userId) {
       return res.status(403).json({
         success: false,
         error: 'Only the ride owner can complete the ride',
@@ -1832,8 +1832,8 @@ async function getRideTracking(req, res) {
 
     // Get tracking data for the current user
     const trackingData = await RideTracking.findOne({
-      ride: id,
-      user: userId,
+      ride: new Types.ObjectId(id),
+      user: new Types.ObjectId(userId),
     });
 
     if (!trackingData) {
