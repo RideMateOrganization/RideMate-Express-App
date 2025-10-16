@@ -43,29 +43,6 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
-    phone: {
-      type: String,
-      trim: true,
-      unique: true,
-      sparse: true, // Allows multiple null values for unique constraint
-      required: false,
-      match: [/^(\+\d{1,3}[- ]?)?\d{10}$/, 'Please add a valid phone number'],
-      default: '',
-    },
-    phoneCountryCode: {
-      type: String,
-      trim: true,
-      required: false,
-      match: [
-        /^\+\d{1,4}$/,
-        "Phone country code must start with '+' followed by 1 to 4 digits.",
-      ],
-      default: '',
-    },
-    isPhoneVerified: {
-      type: Boolean,
-      default: false,
-    },
   },
   {
     toJSON: { virtuals: true },
@@ -110,6 +87,14 @@ betterAuthUserSchema.virtual('documentId').get(function getDocumentId() {
 betterAuthUserSchema.virtual('id').get(function getId() {
   // eslint-disable-next-line no-underscore-dangle
   return this._id.toHexString();
+});
+
+// Add virtual populate for profile
+betterAuthUserSchema.virtual('profile', {
+  ref: 'UserProfile',
+  localField: '_id',
+  foreignField: 'authId',
+  justOne: true,
 });
 
 const User = mongoose.model('User', betterAuthUserSchema);

@@ -94,8 +94,6 @@ async function updateUser(req, res) {
       'dob',
       'bloodGroup',
       'address',
-      'phone',
-      'phoneCountryCode',
     ];
 
     // Filter out fields that are not allowed to be updated

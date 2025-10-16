@@ -102,7 +102,11 @@ async function getRideImages(req, res) {
 
     // Get all images for the ride with user information
     const images = await RideImage.find({ ride: id })
-      .populate('user', 'name email profilePicture')
+      .populate({
+        path: 'user',
+        select: 'name email image phoneNumber',
+        populate: { path: 'profile', select: 'handle' },
+      })
       .sort({ createdAt: -1 }); // Sort by newest first
 
     res.status(200).json({

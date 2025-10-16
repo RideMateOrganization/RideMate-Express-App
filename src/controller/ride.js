@@ -275,8 +275,16 @@ async function getRides(req, res) {
     const totalPages = Math.ceil(totalRides / limitNum);
 
     const rides = await Ride.find(filterObj)
-      .populate('owner', 'name email image')
-      .populate('participants.user', 'name email image')
+      .populate({
+        path: 'owner',
+        select: 'name email image phoneNumber',
+        populate: { path: 'profile', select: 'handle' },
+      })
+      .populate({
+        path: 'participants.user',
+        select: 'name email image phoneNumber',
+        populate: { path: 'profile', select: 'handle' },
+      })
       .sort(sortObj)
       .skip(skip)
       .limit(limitNum);
@@ -585,7 +593,11 @@ async function getPendingRequests(req, res) {
       status: 'pending',
     })
       .populate('ride', 'name rideId startTime')
-      .populate('user', 'handle')
+      .populate({
+        path: 'user',
+        select: 'name email image phoneNumber',
+        populate: { path: 'profile', select: 'handle' },
+      })
       .sort({ requestedAt: -1 });
 
     // Group requests by ride
@@ -643,7 +655,11 @@ async function approveRejectRequest(req, res) {
     // Find the request and populate ride details
     const request = await RideRequest.findById(requestId)
       .populate('ride')
-      .populate('user', 'handle _id');
+      .populate({
+        path: 'user',
+        select: '_id name email image phoneNumber',
+        populate: { path: 'profile', select: 'handle' },
+      });
 
     if (!request) {
       return res
@@ -822,7 +838,8 @@ async function getMyRequests(req, res) {
         path: 'ride',
         populate: {
           path: 'owner',
-          select: 'handle phoneCountryCode phone',
+          select: 'phoneNumber',
+          populate: { path: 'profile', select: 'handle' },
         },
       })
       .sort({ createdAt: -1 });
@@ -878,7 +895,11 @@ async function deleteRideRequest(req, res) {
     // Find the request
     const request = await RideRequest.findById(requestId)
       .populate('ride', 'name rideId owner')
-      .populate('user', 'handle _id');
+      .populate({
+        path: 'user',
+        select: '_id name email image phoneNumber',
+        populate: { path: 'profile', select: 'handle' },
+      });
 
     if (!request) {
       return res.status(404).json({
@@ -957,7 +978,11 @@ async function getRideParticipants(req, res) {
 
     // Find the ride with populated participants
     const ride = await Ride.findById(id)
-      .populate('participants.user', 'handle name email _id documentId')
+      .populate({
+        path: 'participants.user',
+        select: '_id name email image phoneNumber',
+        populate: { path: 'profile', select: 'handle' },
+      })
       .select('name rideId owner participants maxParticipants id');
 
     if (!ride) {
@@ -992,7 +1017,11 @@ async function getRideParticipants(req, res) {
       ride: id,
       status: 'pending',
     })
-      .populate('user', 'handle name email _id documentId')
+      .populate({
+        path: 'user',
+        select: '_id name email image phoneNumber',
+        populate: { path: 'profile', select: 'handle' },
+      })
       .sort({ createdAt: -1 });
 
     // Organize participants by status
@@ -1222,8 +1251,16 @@ async function getNearbyRides(req, res) {
 
     // Find nearby rides with pagination
     const rides = await Ride.find(filterObj)
-      .populate('owner', 'name email image')
-      .populate('participants.user', 'name email image')
+      .populate({
+        path: 'owner',
+        select: 'name email image phoneNumber',
+        populate: { path: 'profile', select: 'handle' },
+      })
+      .populate({
+        path: 'participants.user',
+        select: 'name email image phoneNumber',
+        populate: { path: 'profile', select: 'handle' },
+      })
       .sort({ startTime: 1 })
       .skip(skip)
       .limit(limitNum);
@@ -1545,7 +1582,7 @@ async function cancelRide(req, res) {
     }
 
     // Check if the user is the owner of the ride
-    if (ride.owner !== userId) {
+    if (ride.owner.toString() !== userId) {
       return res.status(403).json({
         success: false,
         error: 'Only the ride owner can cancel the ride',

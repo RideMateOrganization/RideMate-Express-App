@@ -1,6 +1,6 @@
 import RideComment from '../models/ride-comments.js';
 import Ride from '../models/ride.js';
-import { UserProfile } from '../models/user.js';
+import { User } from '../models/user.js';
 
 // @desc    Add a comment to a ride
 // @route   POST /api/v1/rides/:rideId/comments
@@ -61,7 +61,11 @@ async function addComment(req, res) {
     });
 
     // Populate user details
-    await comment.populate('user', 'handle');
+    await comment.populate({
+      path: 'user',
+      select: 'name email image phoneNumber',
+      populate: { path: 'profile', select: 'handle' },
+    });
 
     res.status(201).json({
       success: true,
@@ -138,7 +142,11 @@ async function getComments(req, res) {
 
     // Get comments with pagination
     const comments = await RideComment.find(filter)
-      .populate('user', 'handle')
+      .populate({
+        path: 'user',
+        select: 'name email image phoneNumber',
+        populate: { path: 'profile', select: 'handle' },
+      })
       .populate('parentComment')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -223,7 +231,11 @@ async function updateComment(req, res) {
     await comment.save();
 
     // Populate user details
-    await comment.populate('user', 'handle');
+    await comment.populate({
+      path: 'user',
+      select: 'name email image phoneNumber',
+      populate: { path: 'profile', select: 'handle' },
+    });
 
     res.status(200).json({
       success: true,
@@ -312,7 +324,11 @@ async function getComment(req, res) {
 
     // Find the comment
     const comment = await RideComment.findById(commentId)
-      .populate('user', 'handle')
+      .populate({
+        path: 'user',
+        select: 'name email image phoneNumber',
+        populate: { path: 'profile', select: 'handle' },
+      })
       .populate('parentComment');
 
     if (!comment) {
@@ -345,7 +361,11 @@ async function getComment(req, res) {
 
     // Get replies to this comment
     const replies = await RideComment.find({ parentComment: commentId })
-      .populate('user', 'handle')
+      .populate({
+        path: 'user',
+        select: 'name email image phoneNumber',
+        populate: { path: 'profile', select: 'handle' },
+      })
       .sort({ createdAt: 1 });
 
     // Add like status for current user to main comment
@@ -544,7 +564,9 @@ async function getCommentLikes(req, res) {
     // Populate user details for the likes
     const populatedLikes = await Promise.all(
       likes.map(async (like) => {
-        const user = await UserProfile.findById(like.user).select('handle');
+        const user = await User.findById(like.user)
+          .select('name email image phoneNumber')
+          .populate('profile', 'handle');
         return {
           user,
           likedAt: like.likedAt,

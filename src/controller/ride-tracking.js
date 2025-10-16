@@ -19,6 +19,7 @@ async function getTravelledRoute(req, res) {
     }
 
     // Check if user is a participant in the ride
+    console.log('*********');
     const isParticipant = ride.participants.some(
       (participant) => participant.user.toString() === userId,
     );
@@ -34,7 +35,11 @@ async function getTravelledRoute(req, res) {
     const trackingData = await RideTracking.findOne({
       ride: rideId,
       user: userId,
-    }).populate('user', 'name email handle');
+    }).populate({
+      path: 'user',
+      select: 'name email image phoneNumber',
+      populate: { path: 'profile', select: 'handle' },
+    });
 
     if (!trackingData) {
       return res.status(404).json({
@@ -81,17 +86,20 @@ async function getAllTrackingData(req, res) {
       });
     }
 
-    if (ride.organizer.toString() !== userId) {
+    if (ride.owner.toString() !== userId) {
       return res.status(403).json({
         success: false,
-        error:
-          'Access denied. Only the ride organizer can view all tracking data.',
+        error: 'Access denied. Only the ride owner can view all tracking data.',
       });
     }
 
     // Get all tracking data for this ride
     const allTrackingData = await RideTracking.find({ ride: rideId })
-      .populate('user', 'name email handle')
+      .populate({
+        path: 'user',
+        select: 'name email image phoneNumber',
+        populate: { path: 'profile', select: 'handle' },
+      })
       .sort({ createdAt: 1 });
 
     res.status(200).json({
