@@ -86,8 +86,11 @@ async function getUserById(req, res) {
 // @access Private - Only for logged in users
 async function updateUser(req, res) {
   try {
-    // Fields that can be updated (only UserProfile fields, not Better Auth fields)
-    const allowedUpdates = [
+    // Fields that can be updated in Better Auth User model
+    const betterAuthAllowedUpdates = ['name', 'email', 'phone', 'image'];
+
+    // Fields that can be updated in UserProfile model
+    const profileAllowedUpdates = [
       'handle',
       'bio',
       'gender',
@@ -96,16 +99,23 @@ async function updateUser(req, res) {
       'address',
     ];
 
-    // Filter out fields that are not allowed to be updated
-    const updates = {};
+    // Filter updates into two separate objects
+    const betterAuthUpdates = {};
+    const profileUpdates = {};
+
     Object.keys(req.body).forEach((key) => {
-      if (allowedUpdates.includes(key)) {
-        updates[key] = req.body[key];
+      if (betterAuthAllowedUpdates.includes(key)) {
+        betterAuthUpdates[key] = req.body[key];
+      } else if (profileAllowedUpdates.includes(key)) {
+        profileUpdates[key] = req.body[key];
       }
     });
 
     // If no valid updates provided
-    if (Object.keys(updates).length === 0) {
+    if (
+      Object.keys(betterAuthUpdates).length === 0 &&
+      Object.keys(profileUpdates).length === 0
+    ) {
       return res.status(400).json({
         success: false,
         error: 'No valid fields to update',
@@ -121,6 +131,21 @@ async function updateUser(req, res) {
       });
     }
 
+    let updatedAuthUser = authUser;
+    let updatedUserProfile = null;
+
+    // Update Better Auth User model if there are Better Auth updates
+    if (Object.keys(betterAuthUpdates).length > 0) {
+      updatedAuthUser = await User.findByIdAndUpdate(
+        req.user.id,
+        betterAuthUpdates,
+        {
+          new: true,
+          runValidators: true,
+        },
+      );
+    }
+
     // Find existing user profile or create one if it doesn't exist
     let userProfile = await UserProfile.findByAuthId(req.user.id);
     if (authUser && !userProfile) {
@@ -129,19 +154,23 @@ async function updateUser(req, res) {
       });
     }
 
-    // Update the user profile with the provided updates
-    const updatedUser = await UserProfile.findOneAndUpdate(
-      { authId: req.user.id },
-      updates,
-      {
-        new: true,
-        runValidators: true,
-      },
-    );
+    // Update the user profile with the provided profile updates
+    if (Object.keys(profileUpdates).length > 0) {
+      updatedUserProfile = await UserProfile.findOneAndUpdate(
+        { authId: req.user.id },
+        profileUpdates,
+        {
+          new: true,
+          runValidators: true,
+        },
+      );
+    } else {
+      updatedUserProfile = userProfile;
+    }
 
     const combinedUser = {
-      ...req.user,
-      ...updatedUser.toObject(),
+      ...updatedAuthUser.toObject(),
+      ...updatedUserProfile.toObject(),
     };
 
     res.status(200).json({
