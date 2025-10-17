@@ -4,6 +4,8 @@ import cors from 'cors';
 import morgan from 'morgan';
 import compression from 'compression';
 import { toNodeHandler } from 'better-auth/node';
+import helmet from 'helmet';
+import { rateLimit } from 'express-rate-limit';
 
 import connectToDatabase from './middleware/connect-db.js';
 import auth from './lib/auth.js';
@@ -14,6 +16,18 @@ const env = process.env.NODE_ENV || 'development';
 const PORT = process.env.PORT || 5000;
 
 const app = express();
+
+const limiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  limit: 100,
+  message: {
+    success: false,
+    error: 'Too many requests, please try again later.',
+  },
+});
+
+app.use(helmet());
+app.use(limiter);
 
 app.all('/api/auth/*splat', toNodeHandler(auth));
 
