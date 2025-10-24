@@ -1,7 +1,7 @@
 import mongoose, { Types } from 'mongoose';
-import { v4 as uuidv4 } from 'uuid';
 
 import Ride from '../models/ride.js';
+import generateUniqueRideCode from '../utils/ride-code-generator.js';
 import RideRequest from '../models/ride-requests.js';
 import RideTracking from '../models/ride-tracking.js';
 import UserDevice from '../models/user-device.js';
@@ -12,6 +12,8 @@ import {
   updateParticipantStats,
 } from '../utils/ride-stats-updater.js';
 import { calculateRideStats } from '../utils/ride-stats-calculator.js';
+import getDateRange from '../utils/date-filter.js';
+import calculateDistance from '../utils/distance-calculator.js';
 
 // Create a new ride
 // @route POST /api/rides
@@ -29,6 +31,8 @@ async function createRide(req, res) {
       visibility,
       route,
       difficulty,
+      bannerImage,
+      waypoints,
     } = req.body;
 
     if (
@@ -87,6 +91,35 @@ async function createRide(req, res) {
       }
     }
 
+    // Validate waypoints if provided
+    if (waypoints && Array.isArray(waypoints)) {
+      for (let i = 0; i < waypoints.length; i += 1) {
+        const waypoint = waypoints[i];
+        if (
+          !waypoint.coordinates ||
+          !Array.isArray(waypoint.coordinates) ||
+          waypoint.coordinates.length !== 2 ||
+          typeof waypoint.coordinates[0] !== 'number' ||
+          typeof waypoint.coordinates[1] !== 'number'
+        ) {
+          return res.status(400).json({
+            success: false,
+            error: `Waypoint ${i + 1} coordinates must be provided as [longitude, latitude] array.`,
+          });
+        }
+        if (
+          !waypoint.address ||
+          !waypoint.address.city ||
+          !waypoint.address.country
+        ) {
+          return res.status(400).json({
+            success: false,
+            error: `Waypoint ${i + 1} address must include city and country.`,
+          });
+        }
+      }
+    }
+
     // Create a new Ride instance
     const newRide = new Ride({
       name,
@@ -123,13 +156,31 @@ async function createRide(req, res) {
           }
         : undefined,
       route,
-      maxParticipants,
+      maxParticipants: maxParticipants
+        ? parseInt(maxParticipants, 10)
+        : undefined,
       difficulty: difficulty || 'easy',
-      visibility: visibility || RideVisibility.Public,
+      visibility: visibility || RideVisibility.PUBLIC,
+      bannerImage,
+      waypoints: waypoints
+        ? waypoints.map((waypoint) => ({
+            type: 'Point',
+            coordinates: waypoint.coordinates,
+            address: {
+              addressLine1: waypoint.address.addressLine1,
+              addressLine2: waypoint.address.addressLine2,
+              city: waypoint.address.city,
+              stateProvince: waypoint.address.stateProvince,
+              country: waypoint.address.country,
+              postalCode: waypoint.address.postalCode,
+              landmark: waypoint.address.landmark,
+            },
+          }))
+        : undefined,
       status: 'planned',
     });
 
-    newRide.rideId = uuidv4().toUpperCase();
+    newRide.rideId = await generateUniqueRideCode();
     await newRide.save();
 
     res.status(201).json({
@@ -160,8 +211,11 @@ async function createRide(req, res) {
 // @query   {number} page - Page number for pagination (default: 1)
 // @query   {number} limit - Number of rides per page (default: 10, max: 50)
 // @query   {boolean} participant - Filter rides where user is owner or participant
-// @query   {string} search - Search rides by name, start location, or end location (case-insensitive)
+// @query   {string} search - Search rides by name, description, start location, or end location (case-insensitive)
 // @query   {boolean} completed - Show only completed rides when true
+// @query   {string} dateFilter - Filter by date: 'today', 'tomorrow', 'this_week', 'next_week', 'this_month', 'any' (default: 'any')
+// @query   {string} difficulty - Filter by difficulty: 'easy', 'medium', 'hard', 'extreme', 'any' (default: 'any')
+// @query   {string} participantCount - Filter by participant count: 'small', 'medium', 'large', 'spots_available', 'any' (default: 'any')
 async function getRides(req, res) {
   try {
     const {
@@ -172,6 +226,9 @@ async function getRides(req, res) {
       participant,
       search,
       completed,
+      dateFilter = 'any',
+      difficulty = 'any',
+      participantCount = 'any',
     } = req.query;
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
@@ -188,6 +245,19 @@ async function getRides(req, res) {
     } else {
       // By default, exclude completed and cancelled rides
       statusFilter = { status: { $nin: ['completed', 'cancelled'] } };
+    }
+
+    // Handle date filtering
+    if (dateFilter && dateFilter !== 'any') {
+      const dateRange = getDateRange(dateFilter);
+      if (dateRange) {
+        filterObj.startTime = dateRange;
+      }
+    }
+
+    // Handle difficulty filtering
+    if (difficulty && difficulty !== 'any') {
+      filterObj.difficulty = difficulty;
     }
 
     // Apply user-based filters
@@ -232,11 +302,57 @@ async function getRides(req, res) {
       Object.assign(filterObj, statusFilter);
     }
 
+    // Handle participant count filtering
+    if (participantCount && participantCount !== 'any') {
+      let participantCountExpr;
+
+      switch (participantCount) {
+        case 'small':
+          participantCountExpr = { $lte: 5 };
+          break;
+        case 'medium':
+          participantCountExpr = { $gte: 6, $lte: 15 };
+          break;
+        case 'large':
+          participantCountExpr = { $gte: 16 };
+          break;
+        case 'spots_available':
+          // Rides where available spots > 0 (maxParticipants - approvedParticipantsCount > 0)
+          participantCountExpr = {
+            $expr: {
+              $gt: [
+                { $ifNull: ['$maxParticipants', 0] },
+                {
+                  $size: {
+                    $filter: {
+                      input: '$participants',
+                      cond: { $eq: ['$$this.isApproved', true] },
+                    },
+                  },
+                },
+              ],
+            },
+          };
+          break;
+        default:
+          participantCountExpr = null;
+      }
+
+      if (participantCountExpr) {
+        if (participantCount === 'spots_available') {
+          filterObj.$expr = participantCountExpr.$expr;
+        } else {
+          filterObj.maxParticipants = participantCountExpr;
+        }
+      }
+    }
+
     // Add search filter if search parameter is provided
     if (search && search.trim()) {
       const searchRegex = new RegExp(search.trim(), 'i');
       const searchConditions = [
         { name: searchRegex },
+        { description: searchRegex },
         { 'startLocation.address.city': searchRegex },
         { 'startLocation.address.stateProvince': searchRegex },
         { 'startLocation.address.country': searchRegex },
@@ -330,6 +446,9 @@ async function getRides(req, res) {
         participant: participant || 'false',
         search: search || null,
         completed: completed || 'false',
+        dateFilter: dateFilter || 'any',
+        difficulty: difficulty || 'any',
+        participantCount: participantCount || 'any',
       },
     });
   } catch (err) {
@@ -389,7 +508,7 @@ async function getRide(req, res) {
   }
 }
 
-// @desc    Join a ride by rideId
+// @desc    Join a ride by rideId (supports both MongoDB _id and 6-digit code)
 // @route   POST /api/v1/rides/join/:rideId
 // @access  Private
 async function joinRide(req, res) {
@@ -398,12 +517,23 @@ async function joinRide(req, res) {
     const userId = req.user.id;
     const message = req.body?.message ?? '';
 
-    const ride = await Ride.findById(id);
+    // Determine if the ID is a MongoDB ObjectId or a 6-digit ride code
+    const isMongoId = mongoose.Types.ObjectId.isValid(id);
+    let ride;
+
+    if (isMongoId) {
+      // Query by MongoDB _id
+      ride = await Ride.findById(id);
+    } else {
+      // Query by 6-digit ride code (case insensitive)
+      ride = await Ride.findOne({ rideId: id.toUpperCase() });
+    }
 
     if (!ride) {
-      return res
-        .status(404)
-        .json({ success: false, error: `Ride not found with ID ${id}` });
+      const errorMessage = isMongoId
+        ? `Ride not found with ID ${id}`
+        : `Ride not found with code ${id}`;
+      return res.status(404).json({ success: false, error: errorMessage });
     }
 
     // Check if user is already a participant
@@ -419,20 +549,41 @@ async function joinRide(req, res) {
     }
 
     // Check if there's already a pending request
-    const existingRequest = await RideRequest.findOne({
+    const existingPendingRequest = await RideRequest.findOne({
       ride: ride.id,
       user: userId,
       status: 'pending',
     });
 
-    if (existingRequest) {
+    if (existingPendingRequest) {
       return res.status(400).json({
         success: false,
         error: 'You already have a pending request for this ride.',
       });
     }
 
-    if (ride.visibility === RideVisibility.Public) {
+    // Check if user already has an approved request (they're already in the ride)
+    const existingApprovedRequest = await RideRequest.findOne({
+      ride: ride.id,
+      user: userId,
+      status: 'approved',
+    });
+
+    if (existingApprovedRequest) {
+      return res.status(400).json({
+        success: false,
+        error: 'You are already approved for this ride.',
+      });
+    }
+
+    // Clean up any rejected requests to allow new requests
+    await RideRequest.deleteMany({
+      ride: ride.id,
+      user: userId,
+      status: 'rejected',
+    });
+
+    if (ride.visibility === RideVisibility.PUBLIC) {
       if (
         ride.maxParticipants &&
         ride.participants.length >= ride.maxParticipants
@@ -452,57 +603,57 @@ async function joinRide(req, res) {
 
       await ride.save();
 
-      res.status(200).json({
+      return res.status(200).json({
         success: true,
         message: 'Successfully joined the ride!',
         data: ride,
       });
-    } else {
-      // For private rides, create a join request
-      const newRequest = new RideRequest({
-        ride: ride.id,
-        user: userId,
-        message: message || '',
-        status: 'pending',
-      });
-
-      await newRequest.save();
-
-      // Send push notification to the ride owner
-      const rideOwner = ride.owner;
-      const userDevice = await UserDevice.findOne({
-        user: rideOwner,
-        isActive: true,
-      }).sort({ lastSeen: -1 });
-
-      if (userDevice) {
-        await sendPushNotification(
-          userDevice.pushToken,
-          'Ride Request',
-          `You have a new ride request from ${req.user.name}`,
-          message,
-          {
-            notificationType: 'NOTIFICATION__USER_RIDE_JOIN_REQUEST',
-            rideId: ride.id,
-            rideName: ride.name,
-            requesterName: req.user.name,
-            requesterId: userId,
-          },
-        );
-      }
-
-      res.status(200).json({
-        success: true,
-        message:
-          'Your request to join this private ride has been sent to the owner for approval.',
-        data: {
-          requestId: newRequest.id,
-          status: 'pending',
-          rideId: ride.rideId,
-          rideName: ride.name,
-        },
-      });
     }
+
+    // For private rides, create a join request
+    const newRequest = new RideRequest({
+      ride: ride.id,
+      user: userId,
+      message: message || '',
+      status: 'pending',
+    });
+
+    await newRequest.save();
+
+    // Send push notification to the ride owner
+    const rideOwner = ride.owner;
+    const userDevice = await UserDevice.findOne({
+      user: rideOwner,
+      isActive: true,
+    }).sort({ lastSeen: -1 });
+
+    if (userDevice) {
+      await sendPushNotification(
+        userDevice.pushToken,
+        'Ride Request',
+        `You have a new ride request from ${req.user.name}`,
+        message,
+        {
+          notificationType: 'NOTIFICATION__USER_RIDE_JOIN_REQUEST',
+          rideId: ride.id,
+          rideName: ride.name,
+          requesterName: req.user.name,
+          requesterId: userId,
+        },
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message:
+        'Your request to join this private ride has been sent to the owner for approval.',
+      data: {
+        requestId: newRequest.id,
+        status: 'pending',
+        rideId: ride.rideId,
+        rideName: ride.name,
+      },
+    });
   } catch (err) {
     console.error('Error joining ride:', err);
     if (err.name === 'ValidationError') {
@@ -686,6 +837,20 @@ async function approveRejectRequest(req, res) {
     const userId = request.user.id || request.user;
 
     if (action === 'approve') {
+      // Check if user already has an approved request for this ride
+      const existingApprovedRequest = await RideRequest.findOne({
+        ride: request.ride.id,
+        user: userId,
+        status: 'approved',
+      });
+
+      if (existingApprovedRequest) {
+        return res.status(400).json({
+          success: false,
+          error: 'This user already has an approved request for this ride',
+        });
+      }
+
       // For approvals, we need to delete existing requests and create a new approved one
       // because approved requests can't coexist with pending ones due to unique constraint
       await RideRequest.deleteMany({
@@ -838,9 +1003,14 @@ async function getMyRequests(req, res) {
         path: 'ride',
         populate: {
           path: 'owner',
-          select: 'phoneNumber',
+          select: 'name email image phoneNumber',
           populate: { path: 'profile', select: 'handle' },
         },
+      })
+      .populate({
+        path: 'respondedBy',
+        select: 'name email image phoneNumber',
+        populate: { path: 'profile', select: 'handle' },
       })
       .sort({ createdAt: -1 });
 
@@ -974,7 +1144,6 @@ async function deleteRideRequest(req, res) {
 async function getRideParticipants(req, res) {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
 
     // Find the ride with populated participants
     const ride = await Ride.findById(id)
@@ -989,27 +1158,6 @@ async function getRideParticipants(req, res) {
       return res
         .status(404)
         .json({ success: false, error: `Ride not found with ID ${id}` });
-    }
-
-    // Check if user has access to this ride
-    const isOwner = ride.owner.toString() === userId.toString();
-    const isApprovedParticipant = ride.participants.some((participant) => {
-      // Handle both populated and non-populated user references
-      const { user } = participant;
-      // eslint-disable-next-line no-underscore-dangle
-      const userRef = user?.id || user?._id || user;
-      return (
-        userRef &&
-        userRef.toString() === userId.toString() &&
-        participant.isApproved
-      );
-    });
-
-    if (!isOwner && !isApprovedParticipant) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied: not owner or approved participant',
-      });
     }
 
     // Get pending requests for this ride
@@ -1245,6 +1393,14 @@ async function getNearbyRides(req, res) {
       status: { $nin: ['completed', 'cancelled'] },
     };
 
+    // Exclude rides where user is owner or participant
+    if (req.user) {
+      filterObj.$and = [
+        { owner: { $ne: req.user.id } },
+        { 'participants.user': { $ne: req.user.id } },
+      ];
+    }
+
     // Get total count for pagination
     const totalRides = await Ride.countDocuments(filterObj);
     const totalPages = Math.ceil(totalRides / limitNum);
@@ -1265,7 +1421,7 @@ async function getNearbyRides(req, res) {
       .skip(skip)
       .limit(limitNum);
 
-    // Organize participants for each ride to match getRides structure
+    // Organize participants for each ride and calculate distance
     const ridesWithOrganizedParticipants = rides.map((ride) => {
       const rideObj = ride.toObject();
       const approvedCount = rideObj.participants.filter(
@@ -1275,6 +1431,16 @@ async function getNearbyRides(req, res) {
         (p) => !p.isApproved,
       ).length;
 
+      // Calculate distance from user location to ride start location
+      const rideLat = rideObj.startLocation.coordinates[1]; // latitude
+      const rideLon = rideObj.startLocation.coordinates[0]; // longitude
+      const distanceMeters = calculateDistance(
+        latitude,
+        longitude,
+        rideLat,
+        rideLon,
+      );
+
       rideObj.participants = {
         approved: approvedCount,
         pending: pendingCount,
@@ -1283,6 +1449,10 @@ async function getNearbyRides(req, res) {
           ? rideObj.maxParticipants - approvedCount
           : 0,
       };
+
+      // Add distance information
+      rideObj.distanceFromUser = distanceMeters;
+
       return rideObj;
     });
 

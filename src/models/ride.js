@@ -148,7 +148,7 @@ const RideSchema = new mongoose.Schema(
     },
     difficulty: {
       type: String,
-      enum: ['easy', 'moderate', 'hard', 'extreme'],
+      enum: ['easy', 'medium', 'hard', 'extreme'],
       default: 'easy',
     },
     rideId: {
@@ -157,9 +157,14 @@ const RideSchema = new mongoose.Schema(
       unique: true,
       uppercase: true,
       trim: true,
-      minlength: [36, 'Ride ID must be a UUID (36 characters long)'], // Standard UUID length
-      maxlength: [36, 'Ride ID must be a UUID (36 characters long)'],
+      minlength: [6, 'Ride ID must be 6 characters long'],
+      maxlength: [6, 'Ride ID must be 6 characters long'],
     },
+    bannerImage: {
+      type: String,
+      trim: true,
+    },
+    waypoints: [LocationSchema],
     createdAt: {
       type: Date,
       default: Date.now,

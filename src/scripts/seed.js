@@ -1,6 +1,6 @@
 require('dotenv').config({ path: './.env', quiet: true });
-const { v4: uuidv4 } = require('uuid');
 const { connectDB, disconnectDB } = require('../config/db');
+const generateUniqueRideCode = require('../utils/ride-code-generator.js');
 const UserProfile = require('../models/user');
 const Ride = require('../models/ride');
 const RideRequest = require('../models/ride-requests');
@@ -231,7 +231,7 @@ function generateParticipants(ownerId) {
 }
 
 // Generate random ride data for a user
-function generateRideData(ownerId) {
+async function generateRideData(ownerId) {
   // Generate rides across different time periods: next week, next month, next 3 months
   const timeRanges = [
     { min: 1, max: 7 }, // Next week
@@ -302,7 +302,7 @@ function generateRideData(ownerId) {
       if (rand < 0.95) return 'completed'; // 15% completed
       return 'cancelled'; // 5% cancelled
     })(),
-    rideId: uuidv4(),
+    rideId: await generateUniqueRideCode(),
   };
 }
 
@@ -414,13 +414,15 @@ async function seedDatabase() {
     // Generate rides for each user
     console.log('🚴 Generating rides...');
     const rides = [];
-    users.forEach((user) => {
-      const numRides = Math.floor(Math.random() * 5) + 3; // 3-7 rides per user
-      for (let i = 0; i < numRides; i += 1) {
-        const rideData = generateRideData(user.id);
-        rides.push(rideData);
-      }
-    });
+    await Promise.all(
+      users.map(async (user) => {
+        const numRides = Math.floor(Math.random() * 5) + 3; // 3-7 rides per user
+        const userRides = await Promise.all(
+          Array.from({ length: numRides }, () => generateRideData(user.id)),
+        );
+        rides.push(...userRides);
+      }),
+    );
 
     const createdRides = await Ride.insertMany(rides);
     console.log(`✅ Created ${createdRides.length} rides`);
