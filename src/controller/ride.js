@@ -5,7 +5,7 @@ import generateUniqueRideCode from '../utils/ride-code-generator.js';
 import RideRequest from '../models/ride-requests.js';
 import RideTracking from '../models/ride-tracking.js';
 import UserDevice from '../models/user-device.js';
-import { RideVisibility } from '../utils/constants.js';
+import { RideVisibility, RideStatus } from '../utils/constants.js';
 import { sendPushNotification } from '../utils/expo-push-manager.js';
 import {
   updateRideStats,
@@ -212,7 +212,7 @@ async function createRide(req, res) {
 // @query   {number} limit - Number of rides per page (default: 10, max: 50)
 // @query   {boolean} participant - Filter rides where user is owner or participant
 // @query   {string} search - Search rides by name, description, start location, or end location (case-insensitive)
-// @query   {boolean} completed - Show only completed rides when true
+// @query   {string} status - Filter by status: 'planned', 'active', 'completed', 'cancelled' or comma-separated values (default: 'planned,active')
 // @query   {string} dateFilter - Filter by date: 'today', 'tomorrow', 'this_week', 'next_week', 'this_month', 'any' (default: 'any')
 // @query   {string} difficulty - Filter by difficulty: 'easy', 'medium', 'hard', 'extreme', 'any' (default: 'any')
 // @query   {string} participantCount - Filter by participant count: 'small', 'medium', 'large', 'spots_available', 'any' (default: 'any')
@@ -225,7 +225,7 @@ async function getRides(req, res) {
       limit = 10,
       participant,
       search,
-      completed,
+      status,
       dateFilter = 'any',
       difficulty = 'any',
       participantCount = 'any',
@@ -237,14 +237,29 @@ async function getRides(req, res) {
 
     const filterObj = {};
 
-    // Handle status filtering based on completed parameter
+    // Handle status filtering
     let statusFilter;
-    if (completed === 'true') {
-      // Show only completed rides
-      statusFilter = { status: 'completed' };
+    if (status) {
+      // Parse comma-separated status values
+      const statusArray = status.split(',').map((s) => s.trim());
+      const validStatuses = Object.values(RideStatus);
+      const filteredStatuses = statusArray.filter((s) =>
+        validStatuses.includes(s),
+      );
+
+      if (filteredStatuses.length > 0) {
+        statusFilter = { status: { $in: filteredStatuses } };
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: `Invalid status values. Valid options are: ${validStatuses.join(', ')}`,
+        });
+      }
     } else {
-      // By default, exclude completed and cancelled rides
-      statusFilter = { status: { $nin: ['completed', 'cancelled'] } };
+      // Default: show planned and active rides (exclude completed and cancelled)
+      statusFilter = {
+        status: { $in: [RideStatus.PLANNED, RideStatus.ACTIVE] },
+      };
     }
 
     // Handle date filtering
@@ -445,7 +460,7 @@ async function getRides(req, res) {
         startTime: startTime || 'asc',
         participant: participant || 'false',
         search: search || null,
-        completed: completed || 'false',
+        status: status || 'planned,active',
         dateFilter: dateFilter || 'any',
         difficulty: difficulty || 'any',
         participantCount: participantCount || 'any',

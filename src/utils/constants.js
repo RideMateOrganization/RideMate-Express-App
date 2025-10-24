@@ -3,4 +3,11 @@ const RideVisibility = {
   PRIVATE: 'private',
 };
 
-export { RideVisibility };
+const RideStatus = {
+  PLANNED: 'planned',
+  ACTIVE: 'active',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
+};
+
+export { RideVisibility, RideStatus };

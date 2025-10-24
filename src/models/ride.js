@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { RideVisibility } from '../utils/constants.js';
+import { RideVisibility, RideStatus } from '../utils/constants.js';
 
 const AddressSchema = new mongoose.Schema(
   {
@@ -143,8 +143,8 @@ const RideSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['planned', 'active', 'completed', 'cancelled'],
-      default: 'planned',
+      enum: Object.values(RideStatus),
+      default: RideStatus.PLANNED,
     },
     difficulty: {
       type: String,
