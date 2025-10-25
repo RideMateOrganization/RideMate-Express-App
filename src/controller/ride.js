@@ -2107,10 +2107,349 @@ async function getRideTracking(req, res) {
   }
 }
 
+// @desc    Update a ride
+// @route   PUT /api/v1/rides/:id
+// @access  Private
+async function updateRide(req, res) {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const {
+      name,
+      description,
+      startTime,
+      endTime,
+      startLocation,
+      endLocation,
+      maxParticipants,
+      visibility,
+      route,
+      difficulty,
+      bannerImage,
+      waypoints,
+    } = req.body;
+
+    // Find the ride
+    const ride = await Ride.findById(id);
+
+    if (!ride) {
+      return res.status(404).json({
+        success: false,
+        error: `Ride not found with ID ${id}`,
+      });
+    }
+
+    // Check if the user is the owner of the ride
+    if (ride.owner.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'Only the ride owner can edit the ride',
+      });
+    }
+
+    // Check if the ride is in 'planned' status
+    if (ride.status !== 'planned') {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot edit ride. Current status is '${ride.status}'. Only planned rides can be edited.`,
+      });
+    }
+
+    // Validate required fields
+    if (
+      !name ||
+      !startTime ||
+      !startLocation ||
+      !startLocation.coordinates ||
+      !Array.isArray(startLocation.coordinates) ||
+      startLocation.coordinates.length !== 2 ||
+      !startLocation.address ||
+      !startLocation.address.city ||
+      !startLocation.address.country
+    ) {
+      return res.status(400).json({
+        success: false,
+        error:
+          'Please provide ride name, start time, start location coordinates as [longitude, latitude] array, city, and country.',
+      });
+    }
+
+    if (
+      typeof startLocation.coordinates[0] !== 'number' ||
+      typeof startLocation.coordinates[1] !== 'number'
+    ) {
+      return res.status(400).json({
+        success: false,
+        error:
+          'Start location coordinates must be valid numbers in [longitude, latitude] format.',
+      });
+    }
+
+    // Add more detailed validation for endLocation if it's provided
+    if (endLocation) {
+      if (
+        !endLocation.coordinates ||
+        !Array.isArray(endLocation.coordinates) ||
+        endLocation.coordinates.length !== 2 ||
+        typeof endLocation.coordinates[0] !== 'number' ||
+        typeof endLocation.coordinates[1] !== 'number'
+      ) {
+        return res.status(400).json({
+          success: false,
+          error:
+            'End location coordinates must be provided as [longitude, latitude] array if endLocation is provided.',
+        });
+      }
+      if (
+        !endLocation.address ||
+        !endLocation.address.city ||
+        !endLocation.address.country
+      ) {
+        return res.status(400).json({
+          success: false,
+          error:
+            'End location address must include city and country if endLocation is provided.',
+        });
+      }
+    }
+
+    // Validate waypoints if provided
+    if (waypoints && Array.isArray(waypoints)) {
+      for (let i = 0; i < waypoints.length; i += 1) {
+        const waypoint = waypoints[i];
+        if (
+          !waypoint.coordinates ||
+          !Array.isArray(waypoint.coordinates) ||
+          waypoint.coordinates.length !== 2 ||
+          typeof waypoint.coordinates[0] !== 'number' ||
+          typeof waypoint.coordinates[1] !== 'number'
+        ) {
+          return res.status(400).json({
+            success: false,
+            error: `Waypoint ${i + 1} coordinates must be provided as [longitude, latitude] array.`,
+          });
+        }
+        if (
+          !waypoint.address ||
+          !waypoint.address.city ||
+          !waypoint.address.country
+        ) {
+          return res.status(400).json({
+            success: false,
+            error: `Waypoint ${i + 1} address must include city and country.`,
+          });
+        }
+      }
+    }
+
+    // Store original values to detect changes
+    const originalRide = {
+      startTime: ride.startTime,
+      endTime: ride.endTime,
+      startLocation: ride.startLocation,
+      endLocation: ride.endLocation,
+      waypoints: ride.waypoints,
+      route: ride.route,
+    };
+
+    // Prepare update data
+    const updateData = {
+      name,
+      description,
+      startTime: new Date(startTime),
+      endTime: endTime ? new Date(endTime) : undefined,
+      startLocation: {
+        type: 'Point',
+        coordinates: startLocation.coordinates,
+        address: {
+          addressLine1: startLocation.address.addressLine1,
+          addressLine2: startLocation.address.addressLine2,
+          city: startLocation.address.city,
+          stateProvince: startLocation.address.stateProvince,
+          country: startLocation.address.country,
+          postalCode: startLocation.address.postalCode,
+          landmark: startLocation.address.landmark,
+        },
+      },
+      endLocation: endLocation
+        ? {
+            type: 'Point',
+            coordinates: endLocation.coordinates,
+            address: {
+              addressLine1: endLocation.address.addressLine1,
+              addressLine2: endLocation.address.addressLine2,
+              city: endLocation.address.city,
+              stateProvince: endLocation.address.stateProvince,
+              country: endLocation.address.country,
+              postalCode: endLocation.address.postalCode,
+              landmark: endLocation.address.landmark,
+            },
+          }
+        : undefined,
+      route,
+      maxParticipants: maxParticipants
+        ? parseInt(maxParticipants, 10)
+        : undefined,
+      difficulty: difficulty || 'easy',
+      visibility: visibility || RideVisibility.PUBLIC,
+      bannerImage,
+      waypoints: waypoints
+        ? waypoints.map((waypoint) => ({
+            type: 'Point',
+            coordinates: waypoint.coordinates,
+            address: {
+              addressLine1: waypoint.address.addressLine1,
+              addressLine2: waypoint.address.addressLine2,
+              city: waypoint.address.city,
+              stateProvince: waypoint.address.stateProvince,
+              country: waypoint.address.country,
+              postalCode: waypoint.address.postalCode,
+              landmark: waypoint.address.landmark,
+            },
+          }))
+        : undefined,
+    };
+
+    // Update the ride
+    const updatedRide = await Ride.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true,
+    });
+
+    // Detect changes to key fields
+    const keyFieldsChanged = [];
+    const changes = [];
+
+    // Check startTime
+    if (originalRide.startTime.getTime() !== new Date(startTime).getTime()) {
+      keyFieldsChanged.push('startTime');
+      changes.push('start time');
+    }
+
+    // Check endTime
+    const newEndTime = endTime ? new Date(endTime) : undefined;
+    if (originalRide.endTime?.getTime() !== newEndTime?.getTime()) {
+      keyFieldsChanged.push('endTime');
+      changes.push('end time');
+    }
+
+    // Check startLocation
+    if (
+      JSON.stringify(originalRide.startLocation.coordinates) !==
+      JSON.stringify(startLocation.coordinates)
+    ) {
+      keyFieldsChanged.push('startLocation');
+      changes.push('start location');
+    }
+
+    // Check endLocation
+    if (endLocation && originalRide.endLocation) {
+      if (
+        JSON.stringify(originalRide.endLocation.coordinates) !==
+        JSON.stringify(endLocation.coordinates)
+      ) {
+        keyFieldsChanged.push('endLocation');
+        changes.push('end location');
+      }
+    } else if (endLocation && !originalRide.endLocation) {
+      keyFieldsChanged.push('endLocation');
+      changes.push('end location');
+    } else if (!endLocation && originalRide.endLocation) {
+      keyFieldsChanged.push('endLocation');
+      changes.push('end location');
+    }
+
+    // Check waypoints
+    if (JSON.stringify(originalRide.waypoints) !== JSON.stringify(waypoints)) {
+      keyFieldsChanged.push('waypoints');
+      changes.push('waypoints');
+    }
+
+    // Check route
+    if (JSON.stringify(originalRide.route) !== JSON.stringify(route)) {
+      keyFieldsChanged.push('route');
+      changes.push('route');
+    }
+
+    // Send notifications if key fields changed
+    if (keyFieldsChanged.length > 0) {
+      const participantIds = ride.participants
+        .filter((p) => p.isApproved && p.user.toString() !== userId.toString())
+        .map((p) => p.user);
+
+      // Collect all push tokens first
+      const userDevices = await Promise.all(
+        participantIds.map(async (participantId) =>
+          UserDevice.findOne({
+            user: participantId,
+            isActive: true,
+          }).sort({ lastSeen: -1 }),
+        ),
+      );
+
+      // Filter out devices without tokens and collect all valid tokens
+      const validDevices = userDevices.filter(
+        (device) => device && device.pushToken,
+      );
+      const pushTokens = validDevices.map((device) => device.pushToken);
+
+      if (pushTokens.length > 0) {
+        // Send all notifications in a single batch
+        const { tickets, invalidTokens } = await sendPushNotification(
+          pushTokens,
+          'Ride Updated 📝',
+          `The ride "${updatedRide.name}" has been updated`,
+          `The following changes were made: ${changes.join(', ')}`,
+          {
+            notificationType: 'NOTIFICATION__RIDE_UPDATED',
+            rideId: updatedRide.id,
+            rideName: updatedRide.name,
+            ownerName: req.user.name,
+            startTime: updatedRide.startTime,
+            changes,
+          },
+        );
+
+        // Log results
+        console.log(
+          `Sent ${tickets.length} update notifications, ${invalidTokens.length} invalid tokens`,
+        );
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Ride updated successfully',
+      data: updatedRide,
+      changes: keyFieldsChanged.length > 0 ? changes : null,
+    });
+  } catch (err) {
+    console.error('Error updating ride:', err);
+    if (err.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid ride ID format',
+      });
+    }
+    if (err.name === 'ValidationError') {
+      const messages = Object.values(err.errors).map((val) => val.message);
+      return res.status(400).json({
+        success: false,
+        error: messages.join(', '),
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: 'Server Error updating ride',
+    });
+  }
+}
+
 export {
   createRide,
   getRides,
   getRide,
+  updateRide,
   joinRide,
   leaveRide,
   getPendingRequests,

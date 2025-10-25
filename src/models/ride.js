@@ -13,7 +13,7 @@ const AddressSchema = new mongoose.Schema(
       required: [true, 'City is required'],
       trim: true,
     },
-    state: { type: String, trim: true },
+    stateProvince: { type: String, trim: true },
     country: {
       type: String,
       trim: true,

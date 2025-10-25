@@ -4,6 +4,7 @@ import {
   createRide,
   getRides,
   getRide,
+  updateRide,
   joinRide,
   leaveRide,
   getRideParticipants,
@@ -43,7 +44,7 @@ router.use(protect);
 
 router.get('/nearby', getNearbyRides);
 router.route('/').get(getRides).post(createRide);
-router.route('/:id').get(getRide);
+router.route('/:id').get(getRide).put(updateRide);
 router.post('/join/:id', joinRide);
 router.post('/leave/:id', leaveRide);
 router.post('/:id/start', startRide);
