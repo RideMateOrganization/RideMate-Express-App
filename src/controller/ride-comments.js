@@ -148,7 +148,7 @@ async function getComments(req, res) {
         populate: { path: 'profile', select: 'handle' },
       })
       .populate('parentComment')
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: 1 })
       .skip(skip)
       .limit(limitNum);
 
