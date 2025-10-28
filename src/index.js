@@ -21,26 +21,40 @@ const app = express();
 app.set('trust proxy', 1);
 
 const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
-  limit: 100,
+  windowMs: 1 * 60 * 1000, // 1 minute
+  limit: 100, // 100 requests per minute
   message: {
     success: false,
     error: 'Too many requests, please try again later.',
   },
+  // Serverless optimizations
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  // Skip successful requests to reduce overhead
+  skipSuccessfulRequests: false,
+  // Skip failed requests to reduce overhead
+  skipFailedRequests: false,
 });
 
+// Lightweight middleware first (no database dependency)
 app.use(helmet());
-app.use(limiter);
+app.use(compression());
+app.use(cors());
+app.use(express.json());
 
+// Auth routes (no database middleware needed)
 app.all('/api/auth/*splat', toNodeHandler(auth));
 
-app.use(compression());
+// Rate limiting after basic middleware
+app.use(limiter);
+
+// Database connection middleware only for API routes
+app.use(connectToDatabase);
+
+// Logging after other middleware
 if (env === 'development') {
   app.use(morgan('dev'));
 }
-app.use(cors());
-app.use(express.json());
-app.use(connectToDatabase);
 
 app.use('/api/v1', v1Routes);
 
