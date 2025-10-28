@@ -29,8 +29,7 @@ const connectToDatabase = async (req, res, next) => {
         serverSelectionTimeoutMS: 5000, // Reduced timeout for faster failure
         socketTimeoutMS: 30000, // Reduced socket timeout
         connectTimeoutMS: 5000, // Reduced connection timeout
-        bufferCommands: true,
-        bufferMaxEntries: 0, // Disable mongoose buffering for serverless
+        bufferCommands: false, // Disable mongoose buffering for serverless
       });
 
       await connectionPromise;
