@@ -24,6 +24,10 @@ const limiter = rateLimit({
     success: false,
     error: 'Too many requests, please try again later.',
   },
+  skip: (req) => {
+    // Skip rate limiting for debug endpoints
+    return req.path.startsWith('/api/v1/debug');
+  },
 });
 
 app.use(helmet());

@@ -8,6 +8,7 @@ import realtimeRoutes from './realtime.js';
 import privacyPolicyRoutes from './privacy-policy.js';
 import termsOfServiceRoutes from './terms-of-service.js';
 import dataProcessingConsentRoutes from './data-processing-consent.js';
+import debugRoutes from './debug.js';
 
 const router = express.Router();
 router.use('/users', userRoutes);
@@ -18,6 +19,7 @@ router.use('/realtime', realtimeRoutes);
 router.use('/privacy-policy', privacyPolicyRoutes);
 router.use('/terms-of-service', termsOfServiceRoutes);
 router.use('/data-processing-consent', dataProcessingConsentRoutes);
+router.use('/debug', debugRoutes);
 
 router.get('/', (req, res) => {
   res.send('Roadmate API - Version 1');
