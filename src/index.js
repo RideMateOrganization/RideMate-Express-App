@@ -17,16 +17,15 @@ const PORT = process.env.PORT || 5000;
 
 const app = express();
 
+// Trust proxy - required for rate limiting behind Vercel/proxies
+app.set('trust proxy', 1);
+
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   limit: 100,
   message: {
     success: false,
     error: 'Too many requests, please try again later.',
-  },
-  skip: (req) => {
-    // Skip rate limiting for debug endpoints
-    return req.path.startsWith('/api/v1/debug');
   },
 });
 
