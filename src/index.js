@@ -15,20 +15,30 @@ dotenv.config({ path: './.env', quiet: true });
 const env = process.env.NODE_ENV || 'development';
 const PORT = process.env.PORT || 5000;
 
-// Initialize database connection once at startup
+// Initialize database connection with retry logic
 async function initializeDatabase() {
+  // Check if already connected
+  if (mongoose.connection.readyState === 1) {
+    console.log('✅ Database already connected');
+    return;
+  }
+
   try {
     await mongoose.connect(process.env.MONGO_URI, {
       maxPoolSize: 10,
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 30000,
-      connectTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 10000, // Increased for serverless
+      socketTimeoutMS: 45000, // Increased for serverless
+      connectTimeoutMS: 10000, // Increased for serverless
       bufferCommands: false, // Disable mongoose buffering for serverless
+      bufferMaxEntries: 0, // Disable mongoose buffering
     });
     console.log('✅ Database connected successfully');
   } catch (error) {
     console.error('❌ Database connection failed:', error);
-    process.exit(1); // Exit if database connection fails
+    // Don't exit in serverless - let the middleware handle it
+    if (process.env.NODE_ENV !== 'production') {
+      process.exit(1);
+    }
   }
 }
 
@@ -65,15 +75,57 @@ app.all('/api/auth/*splat', toNodeHandler(auth));
 // Rate limiting after basic middleware
 app.use(limiter);
 
-// Simple database connection check middleware (no connection attempts)
-app.use((req, res, next) => {
-  if (mongoose.connection.readyState !== 1) {
-    return res.status(503).json({
-      success: false,
-      error: 'Database connection not available. Please try again later.',
-    });
+// Database connection middleware with fallback connection attempt
+app.use(async (req, res, next) => {
+  // If connected, proceed immediately
+  if (mongoose.connection.readyState === 1) {
+    return next();
   }
-  next();
+
+  // If connecting, wait for connection
+  if (mongoose.connection.readyState === 2) {
+    try {
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Connection timeout'));
+        }, 5000);
+
+        mongoose.connection.once('connected', () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        mongoose.connection.once('error', (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+      });
+      return next();
+    } catch (error) {
+      console.error('Database connection timeout:', error);
+      return res.status(503).json({
+        success: false,
+        error: 'Database connection timeout. Please try again later.',
+      });
+    }
+  }
+
+  // If disconnected, try to reconnect
+  if (mongoose.connection.readyState === 0) {
+    try {
+      await initializeDatabase();
+      if (mongoose.connection.readyState === 1) {
+        return next();
+      }
+    } catch (error) {
+      console.error('Database reconnection failed:', error);
+    }
+  }
+
+  // If still not connected, return error
+  return res.status(503).json({
+    success: false,
+    error: 'Database connection not available. Please try again later.',
+  });
 });
 
 // Logging after other middleware
@@ -93,13 +145,21 @@ app.use((req, res) => {
   });
 });
 
-// Start server only after database connection is established
+// Start server with database connection
 async function startServer() {
-  await initializeDatabase();
+  try {
+    await initializeDatabase();
 
-  app.listen(PORT, () => {
-    console.info(`🚀 Server running in ${env} mode on port ${PORT}`);
-  });
+    app.listen(PORT, () => {
+      console.info(`🚀 Server running in ${env} mode on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    // In production (Vercel), don't exit - let the middleware handle connections
+    if (process.env.NODE_ENV !== 'production') {
+      process.exit(1);
+    }
+  }
 }
 
 // Handle graceful shutdown
