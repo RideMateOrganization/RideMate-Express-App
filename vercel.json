@@ -7,6 +7,11 @@
     }
   ],
   "routes": [{ "src": "/(.*)", "dest": "src/index.js" }],
+  "functions": {
+    "src/index.js": {
+      "maxDuration": 30
+    }
+  },
   "env": {
     "NODE_ENV": "production"
   }
