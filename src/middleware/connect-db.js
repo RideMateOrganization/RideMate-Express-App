@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { getDatabaseUri } from '../config/database.js';
 
 const connectToDatabase = async (req, res, next) => {
   try {
@@ -8,7 +9,7 @@ const connectToDatabase = async (req, res, next) => {
     }
 
     if (mongoose.connection.readyState === 0) {
-      await mongoose.connect(process.env.MONGO_URI, {
+      await mongoose.connect(getDatabaseUri(), {
         maxPoolSize: 10,
         serverSelectionTimeoutMS: 10000,
         socketTimeoutMS: 60000,

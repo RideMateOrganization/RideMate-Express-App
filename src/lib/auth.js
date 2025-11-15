@@ -8,11 +8,12 @@ import dotenv from 'dotenv';
 
 import sendOTP from '../utils/twilio-verify.js';
 import { UserProfile } from '../models/user.js';
+import { getClusterUri, getDatabaseName } from '../config/database.js';
 
 dotenv.config({ path: './.env' });
 
-const client = new MongoClient(process.env.MONGO_URI);
-const db = client.db();
+const client = new MongoClient(getClusterUri());
+const db = client.db(getDatabaseName());
 
 const auth = betterAuth({
   database: mongodbAdapter(db, { client }),
@@ -37,7 +38,7 @@ const auth = betterAuth({
       sendOTP: async ({ phoneNumber: number, code }) => {
         if (number === process.env.TESTING_PHONE_NUMBER) {
           try {
-            const database = client.db();
+            const database = client.db(getDatabaseName());
             const verificationCollection = database.collection('verification');
             await verificationCollection.updateOne(
               {

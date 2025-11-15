@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { getDatabaseUri } from './database.js';
 
 let cachedDb = null;
 
@@ -19,7 +20,7 @@ async function connectDB() {
   if (cachedDb) return cachedDb;
 
   try {
-    const conn = await mongoose.connect(process.env.MONGO_URI, {
+    const conn = await mongoose.connect(getDatabaseUri(), {
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 10000,
       socketTimeoutMS: 60000,
