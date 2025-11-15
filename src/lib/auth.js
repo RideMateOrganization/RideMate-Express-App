@@ -7,8 +7,13 @@ import { phoneNumber } from 'better-auth/plugins';
 import dotenv from 'dotenv';
 
 import sendOTP from '../utils/twilio-verify.js';
+import {
+  generateHandleFromPhone,
+  generateHandleFromEmail,
+} from '../utils/handle-generator.js';
 import { UserProfile } from '../models/user.js';
 import { getClusterUri, getDatabaseName } from '../config/database.js';
+import { connectDB } from '../config/db.js';
 
 dotenv.config({ path: './.env' });
 
@@ -60,7 +65,7 @@ const auth = betterAuth({
         return sendOTP(number, code);
       },
       signUpOnVerification: {
-        getTempEmail: (number) => `${number}@ridematefe.com`,
+        getTempEmail: (number) => `${number}@ridemate.com`,
         getTempName: (number) => `Rider ${number}`,
       },
       requireVerification: true,
@@ -80,8 +85,17 @@ const auth = betterAuth({
       create: {
         after: async (user) => {
           try {
+            await connectDB();
+            let handle = null;
+            if (user.phoneNumber) {
+              handle = generateHandleFromPhone(user.phoneNumber);
+            } else if (user.email) {
+              handle = generateHandleFromEmail(user.email);
+            }
+
             const mongoUser = new UserProfile({
               authId: user.id,
+              ...(handle && { handle }),
             });
 
             await mongoUser.save();

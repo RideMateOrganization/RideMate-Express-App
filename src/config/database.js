@@ -66,12 +66,7 @@ export function getDatabaseName() {
 export function getDatabaseUri() {
   const clusterUri = getClusterUri();
   const dbName = getDatabaseName();
-
-  // Remove trailing slash from cluster URI if present
-  const cleanClusterUri = clusterUri.endsWith('/')
-    ? clusterUri.slice(0, -1)
-    : clusterUri;
-
-  // Construct full URI with database name
-  return `${cleanClusterUri}/${dbName}`;
+  const url = new URL(clusterUri);
+  url.pathname = `/${dbName}`;
+  return url.toString();
 }
