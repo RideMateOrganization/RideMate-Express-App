@@ -38,6 +38,15 @@ import {
   getAllTrackingData,
 } from '../../controller/ride-tracking.js';
 
+import {
+  createExpense,
+  updateExpense,
+  listRideExpenses,
+  getExpense,
+  deleteExpense,
+  getRideExpenseStatistics,
+} from '../../controller/expense.js';
+
 const router = express.Router();
 
 router.use(protect);
@@ -69,5 +78,14 @@ router
   .delete(deleteComment);
 router.post('/:rideId/comments/:commentId/like', toggleLike);
 router.get('/:rideId/comments/:commentId/likes', getCommentLikes);
+
+// Expense routes
+router.route('/:rideId/expenses').get(listRideExpenses).post(createExpense);
+router.get('/:rideId/expenses/statistics', getRideExpenseStatistics);
+router
+  .route('/:rideId/expenses/:expenseId')
+  .get(getExpense)
+  .put(updateExpense)
+  .delete(deleteExpense);
 
 export default router;

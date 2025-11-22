@@ -10,4 +10,13 @@ const RideStatus = {
   CANCELLED: 'cancelled',
 };
 
-export { RideVisibility, RideStatus };
+const ExpenseCategory = {
+  FUEL: 'fuel',
+  FOOD: 'food',
+  LODGING: 'lodging',
+  MAINTENANCE: 'maintenance',
+  TOLLS: 'tolls',
+  OTHER: 'other',
+};
+
+export { RideVisibility, RideStatus, ExpenseCategory };

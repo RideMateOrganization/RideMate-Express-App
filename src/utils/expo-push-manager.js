@@ -28,7 +28,7 @@ const sendPushNotification = async (
   const { messages, invalidTokens } = pushTokens.reduce(
     (acc, pushToken) => {
       if (!Expo.isExpoPushToken(pushToken)) {
-        // eslint-disable-next-line no-console
+         
         console.error(
           `Push token ${pushToken} is not a valid Expo push token.`,
         );
@@ -63,11 +63,11 @@ const sendPushNotification = async (
     chunks.map(async (chunk) => {
       try {
         const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
-        // eslint-disable-next-line no-console
+         
         console.log('Sent push notification chunk. Tickets:', ticketChunk);
         return ticketChunk;
       } catch (error) {
-        // eslint-disable-next-line no-console
+         
         console.error('Error sending push notification chunk:', error);
         // Handle transient errors here (e.g., network issues) - the SDK has built-in retries
         // but if an error still propagates, it might need higher-level attention.
