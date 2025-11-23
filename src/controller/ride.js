@@ -416,13 +416,14 @@ async function getRides(req, res) {
         select: 'name email image phoneNumber',
         populate: { path: 'profile', select: 'handle' },
       })
+      .lean() // Use lean() for read-only queries
       .sort(sortObj)
       .skip(skip)
       .limit(limitNum);
 
     // Organize participants for each ride to match getRide structure
     const ridesWithOrganizedParticipants = rides.map((ride) => {
-      const rideObj = ride.toObject();
+      const rideObj = ride; // lean() already returns plain objects
       const approvedCount = rideObj.participants.filter(
         (p) => p.isApproved,
       ).length;
@@ -1432,13 +1433,14 @@ async function getNearbyRides(req, res) {
         select: 'name email image phoneNumber',
         populate: { path: 'profile', select: 'handle' },
       })
+      .lean() // Use lean() for read-only queries
       .sort({ startTime: 1 })
       .skip(skip)
       .limit(limitNum);
 
     // Organize participants for each ride and calculate distance
     const ridesWithOrganizedParticipants = rides.map((ride) => {
-      const rideObj = ride.toObject();
+      const rideObj = ride; // lean() already returns plain objects
       const approvedCount = rideObj.participants.filter(
         (p) => p.isApproved,
       ).length;
