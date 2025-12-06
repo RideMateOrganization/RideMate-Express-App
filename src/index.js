@@ -7,46 +7,71 @@ import { toNodeHandler } from 'better-auth/node';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 
-import connectToDatabase from './middleware/connect-db.js';
+import { connectToDatabase, closeDatabaseConnection } from './config/database.js';
 import auth from './lib/auth.js';
 import v1Routes from './routes/v1/index.js';
 
 dotenv.config({ path: './.env', quiet: true });
 const env = process.env.NODE_ENV || 'development';
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 4060;
 
 const app = express();
 
-// Trust proxy - required for rate limiting behind Vercel/proxies
+// Trust proxy - required for rate limiting behind Railway/proxies
 app.set('trust proxy', 1);
 
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   limit: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: {
     success: false,
     error: 'Too many requests, please try again later.',
   },
 });
 
+// Security and performance middleware
 app.use(helmet());
 app.use(limiter);
-
-app.all('/api/auth/*splat', toNodeHandler(auth));
-
 app.use(compression());
+
+// Logging in development
 if (env === 'development') {
   app.use(morgan('dev'));
 }
-app.use(cors());
-app.use(express.json());
-app.use(connectToDatabase);
 
+// Body parsing
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Better Auth handler
+app.all('/api/auth/*splat', toNodeHandler(auth));
+
+// API routes
 app.use('/api/v1', v1Routes);
 
+// Health check endpoint
 app.get('/', (req, res) => {
-  res.send('Ridemate API is running...');
+  res.json({
+    success: true,
+    message: 'Ridemate API is running',
+    environment: env,
+    timestamp: new Date().toISOString(),
+  });
 });
+
+app.get('/health', (req, res) => {
+  res.json({
+    success: true,
+    status: 'healthy',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// 404 handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -54,13 +79,82 @@ app.use((req, res) => {
   });
 });
 
-app.listen(PORT, console.info(`Server running in ${env} mode on port ${PORT}`));
-
-process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received. Shutting down Express server.');
-  app.close(() => {
-    process.exit(0);
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(err.status || 500).json({
+    success: false,
+    error: env === 'production' ? 'Internal server error' : err.message,
   });
 });
+
+let server;
+
+// Start server with database connection
+async function startServer() {
+  try {
+    // Connect to MongoDB before starting the server
+    await connectToDatabase();
+    console.log('✅ MongoDB connected successfully');
+
+    server = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`✅ Server running in ${env} mode on port ${PORT}`);
+    });
+
+    server.on('error', (error) => {
+      console.error('Server error:', error);
+      process.exit(1);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+// Graceful shutdown handler
+async function gracefulShutdown(signal) {
+  console.log(`\n${signal} received. Starting graceful shutdown...`);
+
+  // Stop accepting new connections
+  if (server) {
+    server.close(async () => {
+      console.log('HTTP server closed');
+
+      // Close database connection
+      await closeDatabaseConnection();
+      console.log('Database connection closed');
+
+      console.log('Graceful shutdown completed');
+      process.exit(0);
+    });
+
+    // Force shutdown after 30 seconds
+    setTimeout(() => {
+      console.error('Forced shutdown after timeout');
+      process.exit(1);
+    }, 30000);
+  } else {
+    await closeDatabaseConnection();
+    process.exit(0);
+  }
+}
+
+// Handle shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught errors
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  gracefulShutdown('UNCAUGHT_EXCEPTION');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  gracefulShutdown('UNHANDLED_REJECTION');
+});
+
+// Start the server
+startServer();
 
 export default app;
