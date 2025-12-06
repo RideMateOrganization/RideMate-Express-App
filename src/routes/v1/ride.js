@@ -1,6 +1,14 @@
 import express from 'express';
 import protect from '../../middleware/auth.js';
 import {
+  cacheRidesList,
+  cacheNearbyRides,
+  cacheRideParticipants,
+  cacheRideExpenses,
+  cacheRideExpenseStats,
+  cacheRideComments,
+} from '../../middleware/cache.js';
+import {
   createRide,
   getRides,
   getRide,
@@ -51,26 +59,27 @@ const router = express.Router();
 
 router.use(protect);
 
-router.get('/nearby', getNearbyRides);
-router.route('/').get(getRides).post(createRide);
+// High-priority cached endpoints
+router.get('/nearby', cacheNearbyRides(), getNearbyRides);
+router.route('/').get(cacheRidesList(), getRides).post(createRide);
 router.route('/:id').get(getRide).put(updateRide);
 router.post('/join/:id', joinRide);
 router.post('/leave/:id', leaveRide);
 router.post('/:id/start', startRide);
 router.post('/:id/complete', completeRide);
 router.post('/:id/cancel', cancelRide);
-router.get('/:id/participants', getRideParticipants);
+router.get('/:id/participants', cacheRideParticipants(), getRideParticipants);
 router.delete('/:id/participants/:participantId', removeParticipant);
-router.get('/:id/tracking', getRideTracking);
-router.get('/:id/route', getTravelledRoute);
-router.get('/:id/tracking/all', getAllTrackingData);
+router.get('/:id/tracking', getRideTracking); // No cache - real-time data
+router.get('/:id/route', getTravelledRoute); // No cache - real-time data
+router.get('/:id/tracking/all', getAllTrackingData); // No cache - real-time data
 router.post('/:id/ping', updateLocationTracking);
 
 router.route('/:id/images').get(getRideImages).post(uploadRideImage);
 router.delete('/:id/images/:imageId', deleteRideImage);
 
-// Comment routes
-router.route('/:rideId/comments').get(getComments).post(addComment);
+// Comment routes with caching
+router.route('/:rideId/comments').get(cacheRideComments(), getComments).post(addComment);
 router
   .route('/:rideId/comments/:commentId')
   .get(getComment)
@@ -79,9 +88,9 @@ router
 router.post('/:rideId/comments/:commentId/like', toggleLike);
 router.get('/:rideId/comments/:commentId/likes', getCommentLikes);
 
-// Expense routes
-router.route('/:rideId/expenses').get(listRideExpenses).post(createExpense);
-router.get('/:rideId/expenses/statistics', getRideExpenseStatistics);
+// Expense routes with caching
+router.route('/:rideId/expenses').get(cacheRideExpenses(), listRideExpenses).post(createExpense);
+router.get('/:rideId/expenses/statistics', cacheRideExpenseStats(), getRideExpenseStatistics);
 router
   .route('/:rideId/expenses/:expenseId')
   .get(getExpense)

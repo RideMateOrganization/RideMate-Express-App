@@ -15,6 +15,7 @@ import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 
 import { connectToDatabase, closeDatabaseConnection } from './config/database.js';
+import { connectToRedis, closeRedisConnection, checkRedisHealth } from './config/redis.js';
 import auth from './lib/auth.js';
 import v1Routes from './routes/v1/index.js';
 
@@ -69,12 +70,17 @@ app.get('/', (req, res) => {
   });
 });
 
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  const redisHealthy = await checkRedisHealth();
+
   res.json({
     success: true,
     status: 'healthy',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
+    services: {
+      redis: redisHealthy ? 'connected' : 'disconnected',
+    },
   });
 });
 
@@ -104,6 +110,13 @@ async function startServer() {
     await connectToDatabase();
     console.log('✅ MongoDB connected successfully');
 
+    // Connect to Redis (optional - won't crash if unavailable)
+    try {
+      await connectToRedis();
+    } catch (error) {
+      console.warn('⚠️  Redis connection failed - caching disabled:', error.message);
+    }
+
     server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`✅ Server running in ${env} mode on port ${PORT}`);
     });
@@ -130,6 +143,9 @@ async function gracefulShutdown(signal) {
       // Close database connection
       await closeDatabaseConnection();
       console.log('Database connection closed');
+
+      // Close Redis connection
+      await closeRedisConnection();
 
       console.log('Graceful shutdown completed');
       process.exit(0);

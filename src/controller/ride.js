@@ -14,6 +14,12 @@ import {
 import { calculateRideStats } from '../utils/ride-stats-calculator.js';
 import getDateRange from '../utils/date-filter.js';
 import calculateDistance from '../utils/distance-calculator.js';
+import {
+  invalidateRidesCache,
+  invalidateRideCache,
+  invalidateExpensesCache,
+  invalidateRideRequestsCache,
+} from '../utils/cache.js';
 
 // Create a new ride
 // @route POST /api/rides
@@ -182,6 +188,9 @@ async function createRide(req, res) {
 
     newRide.rideId = await generateUniqueRideCode();
     await newRide.save();
+
+    // Invalidate rides list cache after creating new ride
+    await invalidateRidesCache();
 
     res.status(201).json({
       success: true,

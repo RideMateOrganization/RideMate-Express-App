@@ -9,6 +9,7 @@ import {
   getCategoryColor,
   validateExpenseData,
 } from '../utils/expense-helpers.js';
+import { invalidateExpensesCache } from '../utils/cache.js';
 
 async function createExpense(req, res) {
   try {
@@ -92,6 +93,9 @@ async function createExpense(req, res) {
       select: 'name email image phoneNumber',
       populate: { path: 'profile', select: 'handle' },
     });
+
+    // Invalidate expense caches after creating new expense
+    await invalidateExpensesCache(userId, rideId);
 
     res.status(201).json({
       success: true,
