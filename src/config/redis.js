@@ -39,6 +39,14 @@ export async function connectToRedis() {
     return redisClient;
   }
 
+  // Debug: Log environment variables to diagnose Railway issue
+  console.log('🔍 Redis Environment Variables Check:');
+  console.log('  REDIS_URL:', process.env.REDIS_URL ? 'SET' : 'NOT SET');
+  console.log('  REDISHOST:', process.env.REDISHOST || 'NOT SET');
+  console.log('  REDISPORT:', process.env.REDISPORT || 'NOT SET');
+  console.log('  REDISPASSWORD:', process.env.REDISPASSWORD ? 'SET' : 'NOT SET');
+  console.log('  REDISUSER:', process.env.REDISUSER || 'NOT SET');
+
   try {
     // Railway provides REDIS_URL and individual variables (REDISHOST, REDISPORT, etc.)
     // Prefer REDIS_URL if available, otherwise use individual variables
