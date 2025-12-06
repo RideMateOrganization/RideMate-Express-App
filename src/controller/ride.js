@@ -148,18 +148,18 @@ async function createRide(req, res) {
       },
       endLocation: endLocation
         ? {
-            type: 'Point',
-            coordinates: endLocation.coordinates, // Already in [longitude, latitude] format
-            address: {
-              addressLine1: endLocation.address.addressLine1,
-              addressLine2: endLocation.address.addressLine2,
-              city: endLocation.address.city,
-              stateProvince: endLocation.address.stateProvince,
-              country: endLocation.address.country,
-              postalCode: endLocation.address.postalCode,
-              landmark: endLocation.address.landmark,
-            },
-          }
+          type: 'Point',
+          coordinates: endLocation.coordinates, // Already in [longitude, latitude] format
+          address: {
+            addressLine1: endLocation.address.addressLine1,
+            addressLine2: endLocation.address.addressLine2,
+            city: endLocation.address.city,
+            stateProvince: endLocation.address.stateProvince,
+            country: endLocation.address.country,
+            postalCode: endLocation.address.postalCode,
+            landmark: endLocation.address.landmark,
+          },
+        }
         : undefined,
       route,
       maxParticipants: maxParticipants
@@ -170,18 +170,18 @@ async function createRide(req, res) {
       bannerImage,
       waypoints: waypoints
         ? waypoints.map((waypoint) => ({
-            type: 'Point',
-            coordinates: waypoint.coordinates,
-            address: {
-              addressLine1: waypoint.address.addressLine1,
-              addressLine2: waypoint.address.addressLine2,
-              city: waypoint.address.city,
-              stateProvince: waypoint.address.stateProvince,
-              country: waypoint.address.country,
-              postalCode: waypoint.address.postalCode,
-              landmark: waypoint.address.landmark,
-            },
-          }))
+          type: 'Point',
+          coordinates: waypoint.coordinates,
+          address: {
+            addressLine1: waypoint.address.addressLine1,
+            addressLine2: waypoint.address.addressLine2,
+            city: waypoint.address.city,
+            stateProvince: waypoint.address.stateProvince,
+            country: waypoint.address.country,
+            postalCode: waypoint.address.postalCode,
+            landmark: waypoint.address.landmark,
+          },
+        }))
         : undefined,
       status: 'planned',
     });
@@ -627,6 +627,7 @@ async function joinRide(req, res) {
       });
 
       await ride.save();
+      await invalidateRideCache(ride.id);
 
       return res.status(200).json({
         success: true,
@@ -737,6 +738,7 @@ async function leaveRide(req, res) {
     ride.participants.splice(participantIndex, 1);
 
     await ride.save();
+    await invalidateRideCache(ride.id);
 
     res.status(200).json({
       success: true,
@@ -920,6 +922,8 @@ async function approveRejectRequest(req, res) {
       });
 
       await ride.save();
+      await invalidateRideCache(ride.id);
+      await invalidateRideRequestsCache(ownerId, ride.id);
 
       // Send push notification to the approved user
       const userDevice = await UserDevice.findOne({
@@ -970,6 +974,8 @@ async function approveRejectRequest(req, res) {
           error: 'Failed to reject request',
         });
       }
+
+      await invalidateRideRequestsCache(ownerId, request.ride.id);
 
       // Send push notification to the rejected user
       const userDevice = await UserDevice.findOne({
@@ -1208,7 +1214,7 @@ async function getRideParticipants(req, res) {
       maxParticipants: ride.maxParticipants,
       availableSpots: ride.maxParticipants
         ? ride.maxParticipants -
-          ride.participants.filter((p) => p.isApproved).length
+        ride.participants.filter((p) => p.isApproved).length
         : null,
     };
 
@@ -1282,6 +1288,7 @@ async function removeParticipant(req, res) {
     // Remove the participant
     const removedParticipant = ride.participants.splice(participantIndex, 1)[0];
     await ride.save();
+    await invalidateRideCache(ride.id);
 
     // Send push notification to the removed participant
     const userDevice = await UserDevice.findOne({
@@ -1556,6 +1563,7 @@ async function startRide(req, res) {
     // Update ride status to 'active'
     ride.status = 'active';
     await ride.save();
+    await invalidateRideCache(ride.id);
 
     // Send push notification to all participants
     const participantIds = ride.participants
@@ -1663,6 +1671,7 @@ async function completeRide(req, res) {
     ride.status = 'completed';
     ride.endTime = new Date();
     await ride.save();
+    await invalidateRideCache(ride.id);
 
     // Calculate and update statistics for all participants
     const allTrackingData = await RideTracking.find({
@@ -1796,6 +1805,7 @@ async function cancelRide(req, res) {
     // Update ride status to 'cancelled'
     ride.status = 'cancelled';
     await ride.save();
+    await invalidateRideCache(ride.id);
 
     // Send push notification to all participants
     const participantIds = ride.participants
@@ -2284,18 +2294,18 @@ async function updateRide(req, res) {
       },
       endLocation: endLocation
         ? {
-            type: 'Point',
-            coordinates: endLocation.coordinates,
-            address: {
-              addressLine1: endLocation.address.addressLine1,
-              addressLine2: endLocation.address.addressLine2,
-              city: endLocation.address.city,
-              stateProvince: endLocation.address.stateProvince,
-              country: endLocation.address.country,
-              postalCode: endLocation.address.postalCode,
-              landmark: endLocation.address.landmark,
-            },
-          }
+          type: 'Point',
+          coordinates: endLocation.coordinates,
+          address: {
+            addressLine1: endLocation.address.addressLine1,
+            addressLine2: endLocation.address.addressLine2,
+            city: endLocation.address.city,
+            stateProvince: endLocation.address.stateProvince,
+            country: endLocation.address.country,
+            postalCode: endLocation.address.postalCode,
+            landmark: endLocation.address.landmark,
+          },
+        }
         : undefined,
       route,
       maxParticipants: maxParticipants
@@ -2306,18 +2316,18 @@ async function updateRide(req, res) {
       bannerImage,
       waypoints: waypoints
         ? waypoints.map((waypoint) => ({
-            type: 'Point',
-            coordinates: waypoint.coordinates,
-            address: {
-              addressLine1: waypoint.address.addressLine1,
-              addressLine2: waypoint.address.addressLine2,
-              city: waypoint.address.city,
-              stateProvince: waypoint.address.stateProvince,
-              country: waypoint.address.country,
-              postalCode: waypoint.address.postalCode,
-              landmark: waypoint.address.landmark,
-            },
-          }))
+          type: 'Point',
+          coordinates: waypoint.coordinates,
+          address: {
+            addressLine1: waypoint.address.addressLine1,
+            addressLine2: waypoint.address.addressLine2,
+            city: waypoint.address.city,
+            stateProvince: waypoint.address.stateProvince,
+            country: waypoint.address.country,
+            postalCode: waypoint.address.postalCode,
+            landmark: waypoint.address.landmark,
+          },
+        }))
         : undefined,
     };
 
@@ -2326,6 +2336,8 @@ async function updateRide(req, res) {
       new: true,
       runValidators: true,
     });
+
+    await invalidateRideCache(id);
 
     // Detect changes to key fields
     const keyFieldsChanged = [];

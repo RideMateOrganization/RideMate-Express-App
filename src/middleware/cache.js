@@ -100,6 +100,7 @@ export function cacheRidesList(ttl = CacheTTL.MEDIUM) {
     ttl,
     keyGenerator: (req) => {
       const params = {
+        userId: req.user?.id,
         owner: req.query.owner,
         participant: req.query.participant,
         status: req.query.status,
@@ -126,7 +127,7 @@ export function cacheNearbyRides(ttl = CacheTTL.LONG) {
       // Round coordinates to reduce cache key variations
       const lat = parseFloat(latitude).toFixed(4);
       const lng = parseFloat(longitude).toFixed(4);
-      return generateCacheKey('nearby_rides', { lat, lng, radius, page, limit });
+      return generateCacheKey('nearby_rides', { userId: req.user?.id, lat, lng, radius, page, limit });
     },
   });
 }
@@ -156,7 +157,7 @@ export function cacheRideExpenses(ttl = CacheTTL.MEDIUM) {
     keyGenerator: (req) => {
       const { rideId } = req.params;
       const { category, sortBy, page, limit } = req.query;
-      return generateCacheKey('ride_expenses', { rideId, category, sortBy, page, limit });
+      return generateCacheKey('ride_expenses', { userId: req.user?.id, rideId, category, sortBy, page, limit });
     },
   });
 }
@@ -170,7 +171,7 @@ export function cacheRideExpenseStats(ttl = CacheTTL.LONG) {
     ttl,
     keyGenerator: (req) => {
       const { rideId } = req.params;
-      return generateCacheKey('ride_expense_stats', { rideId });
+      return generateCacheKey('ride_expense_stats', { userId: req.user?.id, rideId });
     },
   });
 }
@@ -184,7 +185,7 @@ export function cacheRideParticipants(ttl = CacheTTL.MEDIUM) {
     ttl,
     keyGenerator: (req) => {
       const { rideId } = req.params;
-      return generateCacheKey('ride_participants', { rideId });
+      return generateCacheKey('ride_participants', { userId: req.user?.id, rideId });
     },
   });
 }
@@ -199,7 +200,7 @@ export function cacheRideComments(ttl = CacheTTL.MEDIUM) {
     keyGenerator: (req) => {
       const { rideId } = req.params;
       const { parentComment, page, limit } = req.query;
-      return generateCacheKey('ride_comments', { rideId, parentComment, page, limit });
+      return generateCacheKey('ride_comments', { userId: req.user?.id, rideId, parentComment, page, limit });
     },
   });
 }

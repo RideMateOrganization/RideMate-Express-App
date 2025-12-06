@@ -175,10 +175,10 @@ export async function invalidateRidesCache() {
 export async function invalidateRideCache(rideId) {
   await Promise.all([
     deleteCache(`${CachePrefix.RIDE_DETAIL}:${rideId}`),
-    invalidatePattern(`${CachePrefix.RIDE_PARTICIPANTS}:${rideId}*`),
-    invalidatePattern(`${CachePrefix.RIDE_EXPENSES}:${rideId}:*`),
-    invalidatePattern(`${CachePrefix.RIDE_EXPENSE_STATS}:${rideId}*`),
-    invalidatePattern(`${CachePrefix.RIDE_COMMENTS}:${rideId}:*`),
+    invalidatePattern(`${CachePrefix.RIDE_PARTICIPANTS}:*:rideId:${rideId}`),
+    invalidatePattern(`${CachePrefix.RIDE_EXPENSES}:*:rideId:${rideId}:*`),
+    invalidatePattern(`${CachePrefix.RIDE_EXPENSE_STATS}:*:rideId:${rideId}`),
+    invalidatePattern(`${CachePrefix.RIDE_COMMENTS}:*:rideId:${rideId}:*`),
     invalidateRidesCache(), // Also invalidate ride lists
   ]);
 }
@@ -190,12 +190,12 @@ export async function invalidateRideCache(rideId) {
  * @returns {Promise<void>}
  */
 export async function invalidateExpensesCache(userId, rideId = null) {
-  const promises = [invalidatePattern(`${CachePrefix.USER_EXPENSES}:${userId}:*`)];
+  const promises = [invalidatePattern(`${CachePrefix.USER_EXPENSES}:*:userId:${userId}:*`)];
 
   if (rideId) {
     promises.push(
-      invalidatePattern(`${CachePrefix.RIDE_EXPENSES}:${rideId}:*`),
-      invalidatePattern(`${CachePrefix.RIDE_EXPENSE_STATS}:${rideId}*`)
+      invalidatePattern(`${CachePrefix.RIDE_EXPENSES}:*:rideId:${rideId}:userId:*`),
+      invalidatePattern(`${CachePrefix.RIDE_EXPENSE_STATS}:rideId:${rideId}:userId:*`)
     );
   }
 
@@ -224,7 +224,7 @@ export async function invalidateRideRequestsCache(userId, rideId = null) {
  * @returns {Promise<void>}
  */
 export async function invalidateCommentsCache(rideId) {
-  await invalidatePattern(`${CachePrefix.RIDE_COMMENTS}:${rideId}:*`);
+  await invalidatePattern(`${CachePrefix.RIDE_COMMENTS}:*:rideId:${rideId}:userId:*`);
 }
 
 /**

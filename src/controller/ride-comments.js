@@ -1,6 +1,7 @@
 import RideComment from '../models/ride-comments.js';
 import Ride from '../models/ride.js';
 import { User } from '../models/user.js';
+import { invalidateCommentsCache } from '../utils/cache.js';
 
 // @desc    Add a comment to a ride
 // @route   POST /api/v1/rides/:rideId/comments
@@ -66,6 +67,8 @@ async function addComment(req, res) {
       select: 'name email image phoneNumber',
       populate: { path: 'profile', select: 'handle' },
     });
+
+    await invalidateCommentsCache(rideId);
 
     res.status(201).json({
       success: true,
@@ -237,6 +240,8 @@ async function updateComment(req, res) {
       populate: { path: 'profile', select: 'handle' },
     });
 
+    await invalidateCommentsCache(comment.ride.toString());
+
     res.status(200).json({
       success: true,
       data: comment,
@@ -292,8 +297,12 @@ async function deleteComment(req, res) {
       });
     }
 
+    const rideId = comment.ride.toString();
+
     // Delete the comment (this will also delete any replies due to cascade)
     await RideComment.findByIdAndDelete(commentId);
+
+    await invalidateCommentsCache(rideId);
 
     res.status(200).json({
       success: true,
@@ -478,6 +487,7 @@ async function toggleLike(req, res) {
     }
 
     await comment.save();
+    await invalidateCommentsCache(comment.ride.toString());
 
     res.status(200).json({
       success: true,
