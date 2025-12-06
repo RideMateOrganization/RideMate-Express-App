@@ -1,3 +1,10 @@
+import { webcrypto } from 'node:crypto';
+
+// Polyfill crypto.subtle for Better Auth
+if (!globalThis.crypto) {
+  globalThis.crypto = webcrypto;
+}
+
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
