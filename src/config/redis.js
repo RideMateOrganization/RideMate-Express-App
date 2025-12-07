@@ -1,3 +1,16 @@
+/**
+ * ⚠️ REDIS TEMPORARILY DISABLED ⚠️
+ *
+ * This file contains Redis configuration and connection logic.
+ * Redis caching is currently disabled and will be implemented later.
+ *
+ * All imports of this file have been commented out throughout the codebase.
+ * To re-enable Redis:
+ * 1. Uncomment imports in src/index.js
+ * 2. Uncomment cache middleware imports in route files
+ * 3. Uncomment cache invalidation calls in controllers
+ */
+
 import Redis from 'ioredis';
 import dotenv from 'dotenv';
 

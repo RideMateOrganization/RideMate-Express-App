@@ -1,3 +1,15 @@
+/**
+ * ⚠️ REDIS CACHING TEMPORARILY DISABLED ⚠️
+ *
+ * This file contains Express middleware for Redis caching.
+ * Redis caching is currently disabled and will be implemented later.
+ *
+ * All imports of this file have been commented out throughout the codebase.
+ * To re-enable:
+ * 1. Uncomment imports in route files (src/routes/v1/ride.js, src/routes/v1/expense.js)
+ * 2. Re-apply cache middleware to route handlers
+ */
+
 import { getCache, setCache, generateCacheKey, CacheTTL } from '../utils/cache.js';
 
 /**

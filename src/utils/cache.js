@@ -1,3 +1,19 @@
+/**
+ * ⚠️ REDIS CACHING TEMPORARILY DISABLED ⚠️
+ *
+ * This file contains cache utility functions for Redis.
+ * Redis caching is currently disabled and will be implemented later.
+ *
+ * All imports of this file have been commented out throughout the codebase.
+ * To re-enable Redis caching:
+ * 1. Uncomment imports in src/index.js
+ * 2. Uncomment cache middleware imports in route files (src/routes/v1/*.js)
+ * 3. Uncomment cache invalidation calls in controllers:
+ *    - src/controller/ride.js
+ *    - src/controller/expense.js
+ *    - src/controller/ride-comments.js
+ */
+
 import { getRedisClient, isRedisAvailable } from '../config/redis.js';
 
 /**

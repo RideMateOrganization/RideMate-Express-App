@@ -1,10 +1,5 @@
 import { webcrypto } from 'node:crypto';
 
-// Polyfill crypto.subtle for Better Auth
-if (!globalThis.crypto) {
-  globalThis.crypto = webcrypto;
-}
-
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
@@ -15,9 +10,15 @@ import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 
 import { connectToDatabase, closeDatabaseConnection } from './config/database.js';
-import { connectToRedis, closeRedisConnection, checkRedisHealth } from './config/redis.js';
+// Redis temporarily disabled - will be implemented later
+// import { connectToRedis, closeRedisConnection, checkRedisHealth } from './config/redis.js';
 import auth from './lib/auth.js';
 import v1Routes from './routes/v1/index.js';
+
+// Polyfill crypto.subtle for Better Auth
+if (!globalThis.crypto) {
+  globalThis.crypto = webcrypto;
+}
 
 dotenv.config({ path: './.env', quiet: true });
 const env = process.env.NODE_ENV || 'development';
@@ -71,16 +72,18 @@ app.get('/', (req, res) => {
 });
 
 app.get('/health', async (req, res) => {
-  const redisHealthy = await checkRedisHealth();
+  // Redis temporarily disabled - will be implemented later
+  // const redisHealthy = await checkRedisHealth();
 
   res.json({
     success: true,
     status: 'healthy',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
-    services: {
-      redis: redisHealthy ? 'connected' : 'disconnected',
-    },
+    // Redis temporarily disabled
+    // services: {
+    //   redis: redisHealthy ? 'connected' : 'disconnected',
+    // },
   });
 });
 
@@ -110,12 +113,13 @@ async function startServer() {
     await connectToDatabase();
     console.log('✅ MongoDB connected successfully');
 
+    // Redis temporarily disabled - will be implemented later
     // Connect to Redis (optional - won't crash if unavailable)
-    try {
-      await connectToRedis();
-    } catch (error) {
-      console.warn('⚠️  Redis connection failed - caching disabled:', error.message);
-    }
+    // try {
+    //   await connectToRedis();
+    // } catch (error) {
+    //   console.warn('⚠️  Redis connection failed - caching disabled:', error.message);
+    // }
 
     server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`✅ Server running in ${env} mode on port ${PORT}`);
@@ -144,8 +148,9 @@ async function gracefulShutdown(signal) {
       await closeDatabaseConnection();
       console.log('Database connection closed');
 
+      // Redis temporarily disabled - will be implemented later
       // Close Redis connection
-      await closeRedisConnection();
+      // await closeRedisConnection();
 
       console.log('Graceful shutdown completed');
       process.exit(0);

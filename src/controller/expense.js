@@ -9,7 +9,8 @@ import {
   getCategoryColor,
   validateExpenseData,
 } from '../utils/expense-helpers.js';
-import { invalidateExpensesCache } from '../utils/cache.js';
+// Redis caching temporarily disabled - will be implemented later
+// import { invalidateExpensesCache } from '../utils/cache.js';
 
 async function createExpense(req, res) {
   try {
@@ -95,7 +96,8 @@ async function createExpense(req, res) {
     });
 
     // Invalidate expense caches after creating new expense
-    await invalidateExpensesCache(userId, rideId);
+    // Redis caching temporarily disabled
+    // await invalidateExpensesCache(userId, rideId);
 
     res.status(201).json({
       success: true,

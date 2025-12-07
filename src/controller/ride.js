@@ -14,12 +14,13 @@ import {
 import { calculateRideStats } from '../utils/ride-stats-calculator.js';
 import getDateRange from '../utils/date-filter.js';
 import calculateDistance from '../utils/distance-calculator.js';
-import {
-  invalidateRidesCache,
-  invalidateRideCache,
-  invalidateExpensesCache,
-  invalidateRideRequestsCache,
-} from '../utils/cache.js';
+// Redis caching temporarily disabled - will be implemented later
+// import {
+//   invalidateRidesCache,
+//   invalidateRideCache,
+//   invalidateExpensesCache,
+//   invalidateRideRequestsCache,
+// } from '../utils/cache.js';
 
 // Create a new ride
 // @route POST /api/rides
@@ -190,7 +191,8 @@ async function createRide(req, res) {
     await newRide.save();
 
     // Invalidate rides list cache after creating new ride
-    await invalidateRidesCache();
+    // Redis caching temporarily disabled
+    // await invalidateRidesCache();
 
     res.status(201).json({
       success: true,
@@ -627,7 +629,8 @@ async function joinRide(req, res) {
       });
 
       await ride.save();
-      await invalidateRideCache(ride.id);
+      // Redis caching temporarily disabled
+      // await invalidateRideCache(ride.id);
 
       return res.status(200).json({
         success: true,
@@ -738,7 +741,8 @@ async function leaveRide(req, res) {
     ride.participants.splice(participantIndex, 1);
 
     await ride.save();
-    await invalidateRideCache(ride.id);
+    // Redis caching temporarily disabled
+    // await invalidateRideCache(ride.id);
 
     res.status(200).json({
       success: true,
@@ -922,8 +926,10 @@ async function approveRejectRequest(req, res) {
       });
 
       await ride.save();
-      await invalidateRideCache(ride.id);
-      await invalidateRideRequestsCache(ownerId, ride.id);
+      // Redis caching temporarily disabled
+      // await invalidateRideCache(ride.id);
+      // Redis caching temporarily disabled
+      // await invalidateRideRequestsCache(ownerId, ride.id);
 
       // Send push notification to the approved user
       const userDevice = await UserDevice.findOne({
@@ -975,7 +981,8 @@ async function approveRejectRequest(req, res) {
         });
       }
 
-      await invalidateRideRequestsCache(ownerId, request.ride.id);
+      // Redis caching temporarily disabled
+      // await invalidateRideRequestsCache(ownerId, request.ride.id);
 
       // Send push notification to the rejected user
       const userDevice = await UserDevice.findOne({
@@ -1288,7 +1295,8 @@ async function removeParticipant(req, res) {
     // Remove the participant
     const removedParticipant = ride.participants.splice(participantIndex, 1)[0];
     await ride.save();
-    await invalidateRideCache(ride.id);
+    // Redis caching temporarily disabled
+    // await invalidateRideCache(ride.id);
 
     // Send push notification to the removed participant
     const userDevice = await UserDevice.findOne({
@@ -1563,7 +1571,8 @@ async function startRide(req, res) {
     // Update ride status to 'active'
     ride.status = 'active';
     await ride.save();
-    await invalidateRideCache(ride.id);
+    // Redis caching temporarily disabled
+    // await invalidateRideCache(ride.id);
 
     // Send push notification to all participants
     const participantIds = ride.participants
@@ -1671,7 +1680,8 @@ async function completeRide(req, res) {
     ride.status = 'completed';
     ride.endTime = new Date();
     await ride.save();
-    await invalidateRideCache(ride.id);
+    // Redis caching temporarily disabled
+    // await invalidateRideCache(ride.id);
 
     // Calculate and update statistics for all participants
     const allTrackingData = await RideTracking.find({
@@ -1805,7 +1815,8 @@ async function cancelRide(req, res) {
     // Update ride status to 'cancelled'
     ride.status = 'cancelled';
     await ride.save();
-    await invalidateRideCache(ride.id);
+    // Redis caching temporarily disabled
+    // await invalidateRideCache(ride.id);
 
     // Send push notification to all participants
     const participantIds = ride.participants
@@ -2337,7 +2348,8 @@ async function updateRide(req, res) {
       runValidators: true,
     });
 
-    await invalidateRideCache(id);
+    // Redis caching temporarily disabled
+    // await invalidateRideCache(id);
 
     // Detect changes to key fields
     const keyFieldsChanged = [];
