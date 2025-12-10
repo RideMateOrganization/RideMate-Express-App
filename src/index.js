@@ -8,6 +8,8 @@ import compression from 'compression';
 import { toNodeHandler } from 'better-auth/node';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 import { connectToDatabase, closeDatabaseConnection } from './config/database.js';
 // Redis temporarily disabled - will be implemented later
@@ -23,6 +25,10 @@ if (!globalThis.crypto) {
 dotenv.config({ path: './.env', quiet: true });
 const env = process.env.NODE_ENV || 'development';
 const PORT = process.env.PORT || 4060;
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -60,6 +66,15 @@ app.all('/api/auth/*splat', toNodeHandler(auth));
 
 // API routes
 app.use('/api/v1', v1Routes);
+
+// Static pages for OAuth consent screen
+app.get('/privacy', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
+});
+
+app.get('/terms', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'terms.html'));
+});
 
 // Health check endpoint
 app.get('/', (req, res) => {
