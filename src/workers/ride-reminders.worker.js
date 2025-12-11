@@ -9,7 +9,7 @@ import { Worker } from 'bullmq';
 
 import { getRedisClient } from '../config/redis.js';
 import Ride from '../models/ride.js';
-import User from '../models/user.js';
+import { User } from '../models/user.js';
 import UserDevice from '../models/user-device.js';
 import { sendPushNotification } from '../utils/expo-push-manager.js';
 import { ReminderType } from '../queues/ride-reminders.queue.js';
@@ -104,7 +104,9 @@ async function processRideReminder(job) {
           ? '🏍️ Your Ride Starts Soon!'
           : '🏍️ Upcoming Ride!';
 
-        const body = `Your ride "${rideName}" starts in ${timeframe}! Make sure everything is ready.`
+        const body = isOwner
+          ? `Your ride "${rideName}" starts in ${timeframe}! Make sure everything is ready.`
+          : `${ownerName}'s ride "${rideName}" starts in ${timeframe}! Get ready to ride.`;
 
         try {
           await sendPushNotification(

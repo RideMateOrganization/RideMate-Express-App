@@ -1,3 +1,16 @@
+/**
+ * BullMQ Queue for Ride Reminder Notifications
+ *
+ * This queue handles scheduled push notifications for upcoming rides:
+ * - 24 hours before ride starts
+ * - 1 hour before ride starts
+ * - 5 minutes before ride starts
+ *
+ * Uses BullMQ for reliable job scheduling with Redis persistence.
+ */
+
+import { Queue } from 'bullmq';
+import { getRedisClient } from '../config/redis.js';
 
 /**
  * Create BullMQ connection options from Redis client
@@ -21,12 +34,19 @@ function getQueueConnection() {
 }
 
 /**
- * Ride Reminders Queue
- * Handles scheduling and processing of ride reminder notifications
+ * Lazy-loaded queue instance
  */
-export const rideRemindersQueue = new Queue('ride-reminders', {
-  connection: getQueueConnection(),
-  defaultJobOptions: {
+let queueInstance = null;
+
+/**
+ * Get or create the ride reminders queue
+ * @returns {Queue} BullMQ queue instance
+ */
+function getRideRemindersQueue() {
+  if (!queueInstance) {
+    queueInstance = new Queue('ride-reminders', {
+      connection: getQueueConnection(),
+      defaultJobOptions: {
     removeOnComplete: {
       count: 100, // Keep last 100 completed jobs for debugging
       age: 24 * 60 * 60, // Keep for 24 hours
@@ -41,7 +61,15 @@ export const rideRemindersQueue = new Queue('ride-reminders', {
       delay: 5000, // Start with 5 second delay
     },
   },
-});
+    });
+  }
+  return queueInstance;
+}
+
+/**
+ * Ride Reminders Queue (lazy-loaded)
+ */
+export const rideRemindersQueue = getRideRemindersQueue;
 
 /**
  * Notification types for ride reminders
@@ -110,7 +138,7 @@ export async function scheduleRideReminder(data) {
   const jobId = `${rideId}-${reminderType}`;
 
   try {
-    const job = await rideRemindersQueue.add(
+    const job = await getRideRemindersQueue().add(
       'send-reminder',
       data,
       {
@@ -147,18 +175,20 @@ export async function cancelRideReminders(rideId) {
       `${rideId}-${ReminderType.FIVE_MIN_BEFORE}`,
     ];
 
-    for (const jobId of jobIds) {
-      try {
-        const job = await rideRemindersQueue.getJob(jobId);
-        if (job) {
-          await job.remove();
-          console.log(`✅ Cancelled reminder job: ${jobId}`);
+    await Promise.all(
+      jobIds.map(async (jobId) => {
+        try {
+          const job = await getRideRemindersQueue().getJob(jobId);
+          if (job) {
+            await job.remove();
+            console.log(`✅ Cancelled reminder job: ${jobId}`);
+          }
+        } catch {
+          // Job might not exist, which is fine
+          console.log(`⚠️  Job ${jobId} not found or already removed`);
         }
-      } catch (error) {
-        // Job might not exist, which is fine
-        console.log(`⚠️  Job ${jobId} not found or already removed`);
-      }
-    }
+      }),
+    );
 
     console.log(`✅ Cancelled all reminders for ride ${rideId}`);
   } catch (error) {
