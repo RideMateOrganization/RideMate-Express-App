@@ -109,8 +109,24 @@ export async function connectToRedis() {
       console.log('📦 Redis: Reconnecting...');
     });
 
-    // Explicitly connect
-    await redisClient.connect();
+    // Explicitly connect and wait for 'ready' event
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Redis connection timeout after 10 seconds'));
+      }, 10000);
+
+      redisClient.once('ready', () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+
+      redisClient.once('error', (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
+
+      redisClient.connect().catch(reject);
+    });
 
     console.log('✅ Redis connection established successfully');
     return redisClient;

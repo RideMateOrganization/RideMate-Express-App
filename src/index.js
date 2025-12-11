@@ -15,7 +15,6 @@ import { connectToDatabase, closeDatabaseConnection } from './config/database.js
 import { connectToRedis, closeRedisConnection, checkRedisHealth } from './config/redis.js';
 import auth from './lib/auth.js';
 import v1Routes from './routes/v1/index.js';
-import { shutdownWorker } from './workers/ride-reminders.worker.js';
 
 // Polyfill crypto.subtle for Better Auth
 if (!globalThis.crypto) {
@@ -118,6 +117,7 @@ app.use((err, req, res, next) => {
 });
 
 let server;
+let workerModule = null; // Store worker module reference for shutdown
 
 // Start server with database connection
 async function startServer() {
@@ -130,7 +130,7 @@ async function startServer() {
     try {
       await connectToRedis();
       // Import worker after Redis is connected
-      await import('./workers/ride-reminders.worker.js');
+      workerModule = await import('./workers/ride-reminders.worker.js');
     } catch (error) {
       console.warn('⚠️  Redis connection failed - notification reminders disabled:', error.message);
     }
@@ -163,7 +163,9 @@ async function gracefulShutdown(signal) {
       console.log('Database connection closed');
 
       // Close worker and Redis connection
-      await shutdownWorker();
+      if (workerModule?.shutdownWorker) {
+        await workerModule.shutdownWorker();
+      }
       await closeRedisConnection();
 
       console.log('Graceful shutdown completed');
