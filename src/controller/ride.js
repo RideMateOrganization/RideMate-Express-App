@@ -14,6 +14,11 @@ import {
 import { calculateRideStats } from '../utils/ride-stats-calculator.js';
 import getDateRange from '../utils/date-filter.js';
 import calculateDistance from '../utils/distance-calculator.js';
+import {
+  scheduleAllRemindersForRide,
+  cancelAllRemindersForRide,
+  rescheduleRemindersForRide,
+} from '../services/ride-notification.service.js';
 // Redis caching temporarily disabled - will be implemented later
 // import {
 //   invalidateRidesCache,
@@ -189,6 +194,24 @@ async function createRide(req, res) {
 
     newRide.rideId = await generateUniqueRideCode();
     await newRide.save();
+
+    // Schedule ride reminder notifications
+    try {
+      const participantIds = newRide.participants.map((p) =>
+        p.user.toString(),
+      );
+       
+      await scheduleAllRemindersForRide(
+        newRide._id.toString(),
+        newRide.name,
+        newRide.startTime,
+        newRide.owner.toString(),
+        participantIds,
+      );
+    } catch (error) {
+      console.error('Failed to schedule ride reminders:', error);
+      // Don't fail the request - reminders are non-critical
+    }
 
     // Invalidate rides list cache after creating new ride
     // Redis caching temporarily disabled
@@ -744,6 +767,24 @@ async function leaveRide(req, res) {
     // Redis caching temporarily disabled
     // await invalidateRideCache(ride.id);
 
+    // Reschedule reminders with updated participant list
+    try {
+      const participantIds = ride.participants.map((p) => p.user.toString());
+      // eslint-disable-next-line no-underscore-dangle
+      await rescheduleRemindersForRide(ride._id.toString(), {
+        rideName: ride.name,
+        rideStartTime: ride.startTime,
+        ownerId: ride.owner.toString(),
+        participantIds,
+      });
+    } catch (error) {
+      console.error(
+        'Failed to reschedule reminders after participant left:',
+        error,
+      );
+      // Don't fail the request - reminders are non-critical
+    }
+
     res.status(200).json({
       success: true,
       data: ride,
@@ -951,6 +992,24 @@ async function approveRejectRequest(req, res) {
             startTime: ride.startTime,
           },
         );
+      }
+
+      // Reschedule reminders with updated participant list
+      try {
+        const participantIds = ride.participants.map((p) => p.user.toString());
+        // eslint-disable-next-line no-underscore-dangle
+        await rescheduleRemindersForRide(ride._id.toString(), {
+          rideName: ride.name,
+          rideStartTime: ride.startTime,
+          ownerId: ride.owner.toString(),
+          participantIds,
+        });
+      } catch (error) {
+        console.error(
+          'Failed to reschedule reminders after participant join:',
+          error,
+        );
+        // Don't fail the request - reminders are non-critical
       }
 
       res.status(200).json({
@@ -1818,6 +1877,17 @@ async function cancelRide(req, res) {
     // Redis caching temporarily disabled
     // await invalidateRideCache(ride.id);
 
+    // Cancel all scheduled reminder notifications
+    try {
+      // eslint-disable-next-line no-underscore-dangle
+      await cancelAllRemindersForRide(ride._id.toString());
+      // eslint-disable-next-line no-underscore-dangle
+      console.log(`✅ Cancelled all reminders for ride ${ride._id}`);
+    } catch (error) {
+      console.error('Failed to cancel ride reminders:', error);
+      // Don't fail the cancellation - reminders will just fire and be ignored
+    }
+
     // Send push notification to all participants
     const participantIds = ride.participants
       .filter((p) => p.isApproved && p.user.toString() !== userId.toString())
@@ -2449,6 +2519,25 @@ async function updateRide(req, res) {
         console.log(
           `Sent ${tickets.length} update notifications, ${invalidTokens.length} invalid tokens`,
         );
+      }
+    }
+
+    // Reschedule reminders if startTime changed
+    if (keyFieldsChanged.includes('startTime')) {
+      try {
+        const participantIds = updatedRide.participants.map((p) =>
+          p.user.toString(),
+        );
+        // eslint-disable-next-line no-underscore-dangle
+        await rescheduleRemindersForRide(updatedRide._id.toString(), {
+          rideName: updatedRide.name,
+          rideStartTime: updatedRide.startTime,
+          ownerId: updatedRide.owner.toString(),
+          participantIds,
+        });
+      } catch (error) {
+        console.error('Failed to reschedule ride reminders:', error);
+        // Don't fail the request - reminders are non-critical
       }
     }
 
