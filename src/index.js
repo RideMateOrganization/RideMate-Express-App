@@ -83,8 +83,18 @@ app.use('/api/auth', (req, res, next) => {
     xForwardedHost: req.get('x-forwarded-host'),
     host: req.get('host'),
     cookie: req.get('cookie') ? 'present' : 'missing',
-    allHeaders: req.headers,
   };
+  
+  // Parse and log cookies separately
+  const cookieHeader = req.get('cookie');
+  if (cookieHeader) {
+    const cookies = {};
+    cookieHeader.split(';').forEach(cookie => {
+      const [name, value] = cookie.trim().split('=');
+      cookies[name] = value;
+    });
+    debugInfo.parsedCookies = cookies;
+  }
   
   // Log state parameter if present
   if (req.query.state) {
@@ -95,6 +105,9 @@ app.use('/api/auth', (req, res, next) => {
   if (req.query.code) {
     debugInfo.codeParam = 'present';
   }
+  
+  // Log full URL for context
+  debugInfo.fullUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
   
   console.log('[AUTH DEBUG]', JSON.stringify(debugInfo, null, 2));
   next();
