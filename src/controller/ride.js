@@ -1618,14 +1618,17 @@ async function startRide(req, res) {
       });
     }
 
-    // Check if the start time has been reached
-    const now = new Date();
-    if (now < ride.startTime) {
-      return res.status(400).json({
-        success: false,
-        error: 'Cannot start ride before the scheduled start time',
-      });
-    }
+     // Check if the start time is within acceptable range (allow starting within 5 minutes before scheduled start)
+     const now = new Date();
+     const timeDiff = ride.startTime.getTime() - now.getTime();
+     const EARLY_START_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
+     
+     if (timeDiff > EARLY_START_THRESHOLD_MS) {
+       return res.status(400).json({
+         success: false,
+         error: `Cannot start ride. Ride is scheduled for ${ride.startTime.toLocaleString()}. Please wait until 5 minutes before the scheduled start time.`,
+       });
+     }
 
     // Update ride status to 'active'
     ride.status = 'active';
