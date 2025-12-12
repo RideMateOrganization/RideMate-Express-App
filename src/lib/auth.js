@@ -21,6 +21,16 @@ const client = new MongoClient(getClusterUri());
 const db = client.db(getDatabaseName());
 
 const auth = betterAuth({
+  advanced: {
+    cookies: {
+      state: {
+        attributes: {
+          sameSite: 'none',
+          secure: true,
+        },
+      },
+    },
+  },
   database: mongodbAdapter(db, { client }),
   trustedOrigins: [
     'ridematefe://',
