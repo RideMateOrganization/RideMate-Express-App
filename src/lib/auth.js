@@ -24,6 +24,7 @@ const auth = betterAuth({
   database: mongodbAdapter(db, { client }),
   trustedOrigins: [
     'ridematefe://',
+    'https://ridemate-prod.up.railway.app',
     // Development mode - Expo's exp:// scheme with local IP ranges
     ...(process.env.NODE_ENV === 'development'
       ? [
