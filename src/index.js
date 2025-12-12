@@ -11,8 +11,15 @@ import { rateLimit } from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-import { connectToDatabase, closeDatabaseConnection } from './config/database.js';
-import { connectToRedis, closeRedisConnection, checkRedisHealth } from './config/redis.js';
+import {
+  connectToDatabase,
+  closeDatabaseConnection,
+} from './config/database.js';
+import {
+  connectToRedis,
+  closeRedisConnection,
+  checkRedisHealth,
+} from './config/redis.js';
 import auth from './lib/auth.js';
 import v1Routes from './routes/v1/index.js';
 
@@ -132,7 +139,10 @@ async function startServer() {
       // Import worker after Redis is connected
       workerModule = await import('./workers/ride-reminders.worker.js');
     } catch (error) {
-      console.warn('⚠️  Redis connection failed - notification reminders disabled:', error.message);
+      console.warn(
+        '⚠️  Redis connection failed - notification reminders disabled:',
+        error.message,
+      );
     }
 
     server = app.listen(PORT, '0.0.0.0', () => {
