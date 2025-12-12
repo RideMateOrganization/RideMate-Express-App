@@ -363,7 +363,7 @@ async function listRideExpenses(req, res) {
     const sortField = sortFieldMap[sortBy] || 'dateTime';
     const sortDirection = sortOrder === 'asc' ? 1 : -1;
 
-    const filter = { ride: rideId };
+    const filter = { ride: rideId, user: userId };
     if (
       category !== 'all' &&
       Object.values(ExpenseCategory).includes(category)
@@ -371,10 +371,10 @@ async function listRideExpenses(req, res) {
       filter.category = category;
     }
 
-    const totalCount = await Expense.countDocuments({ ride: rideId });
+    const totalCount = await Expense.countDocuments({ ride: rideId, user: userId });
 
     const totalAmountResult = await Expense.aggregate([
-      { $match: { ride: new mongoose.Types.ObjectId(rideId) } },
+      { $match: { ride: new mongoose.Types.ObjectId(rideId), user: new mongoose.Types.ObjectId(userId) } },
       {
         $group: {
           _id: null,
@@ -386,7 +386,7 @@ async function listRideExpenses(req, res) {
       totalAmountResult.length > 0 ? totalAmountResult[0].total : 0;
 
     const categoryBreakdown = await Expense.aggregate([
-      { $match: { ride: new mongoose.Types.ObjectId(rideId) } },
+      { $match: { ride: new mongoose.Types.ObjectId(rideId), user: new mongoose.Types.ObjectId(userId) } },
       {
         $group: {
           _id: '$category',
@@ -746,10 +746,11 @@ async function getUserTotalExpenses(req, res) {
       ],
     }).select('_id');
 
-    const rideIds = userRides.map((ride) => ride._id);
+    const rideIds = userRides.map((ride) => ride._id); // eslint-disable-line no-underscore-dangle
 
     const expenseFilter = {
       ride: { $in: rideIds },
+      user: new mongoose.Types.ObjectId(userId),
     };
     if (Object.keys(dateFilter).length > 0) {
       expenseFilter.dateTime = dateFilter;
@@ -805,6 +806,7 @@ async function getUserTotalExpenses(req, res) {
           {
             $match: {
               ride: { $in: rideIds },
+              user: new mongoose.Types.ObjectId(userId),
               dateTime: { $gte: monthStart, $lte: monthEnd },
             },
           },
@@ -969,7 +971,7 @@ async function getRideExpenseStatistics(req, res) {
     }
 
     const totalAmountResult = await Expense.aggregate([
-      { $match: { ride: new mongoose.Types.ObjectId(rideId) } },
+      { $match: { ride: new mongoose.Types.ObjectId(rideId), user: new mongoose.Types.ObjectId(userId) } },
       {
         $group: {
           _id: null,
@@ -981,7 +983,7 @@ async function getRideExpenseStatistics(req, res) {
       totalAmountResult.length > 0 ? totalAmountResult[0].total : 0;
 
     const categoryResult = await Expense.aggregate([
-      { $match: { ride: new mongoose.Types.ObjectId(rideId) } },
+      { $match: { ride: new mongoose.Types.ObjectId(rideId), user: new mongoose.Types.ObjectId(userId) } },
       {
         $group: {
           _id: '$category',
