@@ -22,7 +22,19 @@ const db = client.db(getDatabaseName());
 
 const auth = betterAuth({
   database: mongodbAdapter(db, { client }),
-  trustedOrigins: ['ridematefe:///'],
+  trustedOrigins: [
+    'ridematefe://',
+    'ridematefe://*',
+    ...(process.env.NODE_ENV === 'development'
+      ? [
+          'exp://*/*',
+          'exp://10.0.0.*:*/*',
+          'exp://192.168.*.*:*/*',
+          'exp://172.*.*.*:*/*',
+          'exp://localhost:*/*',
+        ]
+      : []),
+  ],
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID,
