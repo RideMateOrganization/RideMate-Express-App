@@ -67,6 +67,52 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Debug middleware for auth endpoints
+app.use('/api/auth', (req, res, next) => {
+  const debugInfo = {
+    timestamp: new Date().toISOString(),
+    method: req.method,
+    url: req.url,
+    path: req.path,
+    query: req.query,
+    origin: req.get('origin'),
+    referer: req.get('referer'),
+    userAgent: req.get('user-agent'),
+    xForwardedFor: req.get('x-forwarded-for'),
+    xForwardedProto: req.get('x-forwarded-proto'),
+    xForwardedHost: req.get('x-forwarded-host'),
+    host: req.get('host'),
+    cookie: req.get('cookie') ? 'present' : 'missing',
+  };
+  
+  // Parse and log cookies separately
+  const cookieHeader = req.get('cookie');
+  if (cookieHeader) {
+    const cookies = {};
+    cookieHeader.split(';').forEach(cookie => {
+      const [name, value] = cookie.trim().split('=');
+      cookies[name] = value;
+    });
+    debugInfo.parsedCookies = cookies;
+  }
+  
+  // Log state parameter if present
+  if (req.query.state) {
+    debugInfo.stateParam = req.query.state;
+  }
+  
+  // Log code parameter if present (OAuth callback)
+  if (req.query.code) {
+    debugInfo.codeParam = 'present';
+  }
+  
+  // Log full URL for context
+  debugInfo.fullUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+  
+  console.log('[AUTH DEBUG]', JSON.stringify(debugInfo, null, 2));
+  next();
+});
+
 // Better Auth handler
 app.all('/api/auth/*splat', toNodeHandler(auth));
 
