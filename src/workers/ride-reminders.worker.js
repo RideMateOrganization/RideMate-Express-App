@@ -88,15 +88,6 @@ async function processRideReminder(job) {
       `[RIDE REMINDER] DEBUG - Found ${devices.length} active devices`,
     );
 
-    // Debug: Check all devices for this user regardless of isActive status
-    const allDevicesForUser = await UserDevice.find({
-      user: { $in: allUserIds },
-    }).select('user pushToken isActive');
-
-    console.log(
-      `[RIDE REMINDER] DEBUG - All devices for user (regardless of isActive): ${JSON.stringify(allDevicesForUser.map((d) => ({ user: d.user.toString(), isActive: d.isActive })))}`,
-    );
-
     if (devices.length === 0) {
       console.log(
         `[RIDE REMINDER] No active devices found for ride ${rideId} - skipping`,
