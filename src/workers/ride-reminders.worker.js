@@ -42,6 +42,9 @@ async function processRideReminder(job) {
   console.log(
     `[RIDE REMINDER] Processing ${reminderType} reminder for ride ${rideId}`,
   );
+  console.log(
+    `[RIDE REMINDER] DEBUG - ownerId: ${ownerId} (type: ${typeof ownerId}), participantIds: ${JSON.stringify(participantIds)}`,
+  );
 
   try {
     // Verify ride still exists and is in planned status
@@ -71,12 +74,19 @@ async function processRideReminder(job) {
 
     // Collect all user IDs (owner + participants)
     const allUserIds = [ownerId, ...participantIds];
+    console.log(
+      `[RIDE REMINDER] DEBUG - Looking for devices for userIds: ${JSON.stringify(allUserIds)}`,
+    );
 
     // Get push tokens for all users
     const devices = await UserDevice.find({
       user: { $in: allUserIds },
       isActive: true,
     }).select('user pushToken');
+
+    console.log(
+      `[RIDE REMINDER] DEBUG - Found ${devices.length} active devices`,
+    );
 
     if (devices.length === 0) {
       console.log(
@@ -233,5 +243,5 @@ export async function shutdownWorker() {
   }
 }
 
-// eslint-disable-next-line import/no-mutable-exports
+ 
 export default workerInstance;
