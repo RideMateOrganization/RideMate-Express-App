@@ -7,6 +7,7 @@ import RideTracking from '../models/ride-tracking.js';
 import UserDevice from '../models/user-device.js';
 import { RideVisibility, RideStatus } from '../utils/constants.js';
 import { sendPushNotification } from '../utils/expo-push-manager.js';
+import { sendAndSaveNotification } from '../utils/notification-helper.js';
 import {
   updateRideStats,
   updateParticipantStats,
@@ -672,28 +673,22 @@ async function joinRide(req, res) {
 
     await newRequest.save();
 
-    // Send push notification to the ride owner
+    // Send push notification and save to database
     const rideOwner = ride.owner;
-    const userDevice = await UserDevice.findOne({
-      user: rideOwner,
-      isActive: true,
-    }).sort({ lastSeen: -1 });
-
-    if (userDevice) {
-      await sendPushNotification(
-        userDevice.pushToken,
-        'Ride Request',
-        `You have a new ride request from ${req.user.name}`,
-        message,
-        {
-          notificationType: 'NOTIFICATION__USER_RIDE_JOIN_REQUEST',
-          rideId: ride.id,
-          rideName: ride.name,
-          requesterName: req.user.name,
-          requesterId: userId,
-        },
-      );
-    }
+    await sendAndSaveNotification({
+      userId: rideOwner,
+      type: 'USER_RIDE_JOIN_REQUEST',
+      title: 'Ride Request',
+      body: `You have a new ride request from ${req.user.name}`,
+      subtitle: message,
+      data: {
+        notificationType: 'NOTIFICATION__USER_RIDE_JOIN_REQUEST',
+        rideId: ride.id,
+        rideName: ride.name,
+        requesterName: req.user.name,
+        requesterId: userId,
+      },
+    });
 
     res.status(200).json({
       success: true,
@@ -972,27 +967,21 @@ async function approveRejectRequest(req, res) {
       // Redis caching temporarily disabled
       // await invalidateRideRequestsCache(ownerId, ride.id);
 
-      // Send push notification to the approved user
-      const userDevice = await UserDevice.findOne({
-        user: userId,
-        isActive: true,
-      }).sort({ lastSeen: -1 });
-
-      if (userDevice) {
-        await sendPushNotification(
-          userDevice.pushToken,
-          'Ride Request Approved!',
-          `Your request to join "${ride.name}" has been approved!`,
-          responseMessage || 'Welcome to the ride!',
-          {
-            notificationType: 'NOTIFICATION__USER_RIDE_REQUEST_APPROVED',
-            rideId: ride.id,
-            rideName: ride.name,
-            ownerName: req.user.name,
-            startTime: ride.startTime,
-          },
-        );
-      }
+      // Send push notification and save to database
+      await sendAndSaveNotification({
+        userId,
+        type: 'USER_RIDE_REQUEST_APPROVED',
+        title: 'Ride Request Approved!',
+        body: `Your request to join "${ride.name}" has been approved!`,
+        subtitle: responseMessage || 'Welcome to the ride!',
+        data: {
+          notificationType: 'NOTIFICATION__USER_RIDE_REQUEST_APPROVED',
+          rideId: ride.id,
+          rideName: ride.name,
+          ownerName: req.user.name,
+          startTime: ride.startTime,
+        },
+      });
 
       // Reschedule reminders with updated participant list
       try {
@@ -1043,27 +1032,21 @@ async function approveRejectRequest(req, res) {
       // Redis caching temporarily disabled
       // await invalidateRideRequestsCache(ownerId, request.ride.id);
 
-      // Send push notification to the rejected user
-      const userDevice = await UserDevice.findOne({
-        user: userId,
-        isActive: true,
-      }).sort({ lastSeen: -1 });
-
-      if (userDevice) {
-        await sendPushNotification(
-          userDevice.pushToken,
-          'Ride Request Rejected',
-          `Your request to join "${request.ride.name}" has been rejected`,
-          responseMessage || 'Your request was not approved',
-          {
-            notificationType: 'NOTIFICATION__USER_RIDE_REQUEST_REJECTED',
-            rideId: request.ride.id,
-            rideName: request.ride.name,
-            ownerName: req.user.name,
-            startTime: request.ride.startTime,
-          },
-        );
-      }
+      // Send push notification and save to database
+      await sendAndSaveNotification({
+        userId,
+        type: 'USER_RIDE_REQUEST_REJECTED',
+        title: 'Ride Request Rejected',
+        body: `Your request to join "${request.ride.name}" has been rejected`,
+        subtitle: responseMessage || 'Your request was not approved',
+        data: {
+          notificationType: 'NOTIFICATION__USER_RIDE_REQUEST_REJECTED',
+          rideId: request.ride.id,
+          rideName: request.ride.name,
+          ownerName: req.user.name,
+          startTime: request.ride.startTime,
+        },
+      });
 
       res.status(200).json({
         success: true,
@@ -1641,43 +1624,21 @@ async function startRide(req, res) {
       .filter((p) => p.isApproved && p.user.toString() !== userId.toString())
       .map((p) => p.user);
 
-    // Collect all push tokens first
-    const userDevices = await Promise.all(
-      participantIds.map(async (participantId) =>
-        UserDevice.findOne({
-          user: participantId,
-          isActive: true,
-        }).sort({ lastSeen: -1 }),
-      ),
-    );
-
-    // Filter out devices without tokens and collect all valid tokens
-    const validDevices = userDevices.filter(
-      (device) => device && device.pushToken,
-    );
-    const pushTokens = validDevices.map((device) => device.pushToken);
-
-    if (pushTokens.length > 0) {
-      // Send all notifications in a single batch
-      const { tickets, invalidTokens } = await sendPushNotification(
-        pushTokens,
-        'Ride Started! 🚴‍♂️',
-        `The ride "${ride.name}" has started!. Safe travels ahead`,
-        `Your ride is now active. Have a great time!`,
-        {
-          notificationType: 'NOTIFICATION__RIDE_STARTED',
-          rideId: ride.id,
-          rideName: ride.name,
-          ownerName: req.user.name,
-          startTime: ride.startTime,
-        },
-      );
-
-      // Log results
-      console.log(
-        `Sent ${tickets.length} notifications, ${invalidTokens.length} invalid tokens`,
-      );
-    }
+    // Send push notifications and save to database
+    await sendAndSaveNotification({
+      userId: participantIds,
+      type: 'NOTIFICATION__RIDE_STARTED',
+      title: 'Ride Started! 🚴‍♂️',
+      body: `The ride "${ride.name}" has started!. Safe travels ahead`,
+      subtitle: `Your ride is now active. Have a great time!`,
+      data: {
+        notificationType: 'NOTIFICATION__RIDE_STARTED',
+        rideId: ride.id,
+        rideName: ride.name,
+        ownerName: req.user.name,
+        startTime: ride.startTime,
+      },
+    });
 
     res.status(200).json({
       success: true,
@@ -1772,48 +1733,25 @@ async function completeRide(req, res) {
     // Update aggregated ride statistics
     await updateRideStats(id);
 
-    // Send push notification to all participants
+    // Send push notification to all participants and save to database
     const participantIds = ride.participants
       .filter((p) => p.isApproved && p.user.toString() !== userId.toString())
       .map((p) => p.user);
 
-    // Collect all push tokens first
-    const userDevices = await Promise.all(
-      participantIds.map(async (participantId) =>
-        UserDevice.findOne({
-          user: participantId,
-          isActive: true,
-        }).sort({ lastSeen: -1 }),
-      ),
-    );
-
-    // Filter out devices without tokens and collect all valid tokens
-    const validDevices = userDevices.filter(
-      (device) => device && device.pushToken,
-    );
-    const pushTokens = validDevices.map((device) => device.pushToken);
-
-    if (pushTokens.length > 0) {
-      // Send all notifications in a single batch
-      const { tickets, invalidTokens } = await sendPushNotification(
-        pushTokens,
-        'Ride Completed! 🎉',
-        `The ride "${ride.name}" has been completed!`,
-        `Great job completing the ride! Hope you had a wonderful time.`,
-        {
-          notificationType: 'NOTIFICATION__RIDE_COMPLETED',
-          rideId: ride.id,
-          rideName: ride.name,
-          ownerName: req.user.name,
-          endTime: ride.endTime,
-        },
-      );
-
-      // Log results
-      console.log(
-        `Sent ${tickets.length} completion notifications, ${invalidTokens.length} invalid tokens`,
-      );
-    }
+    await sendAndSaveNotification({
+      userId: participantIds,
+      type: 'NOTIFICATION__RIDE_COMPLETED',
+      title: 'Ride Completed! 🎉',
+      body: `The ride "${ride.name}" has been completed!`,
+      subtitle: `Great job completing the ride! Hope you had a wonderful time.`,
+      data: {
+        notificationType: 'NOTIFICATION__RIDE_COMPLETED',
+        rideId: ride.id,
+        rideName: ride.name,
+        ownerName: req.user.name,
+        endTime: ride.endTime,
+      },
+    });
 
     res.status(200).json({
       success: true,
@@ -1896,43 +1834,21 @@ async function cancelRide(req, res) {
       .filter((p) => p.isApproved && p.user.toString() !== userId.toString())
       .map((p) => p.user);
 
-    // Collect all push tokens first
-    const userDevices = await Promise.all(
-      participantIds.map(async (participantId) =>
-        UserDevice.findOne({
-          user: participantId,
-          isActive: true,
-        }).sort({ lastSeen: -1 }),
-      ),
-    );
-
-    // Filter out devices without tokens and collect all valid tokens
-    const validDevices = userDevices.filter(
-      (device) => device && device.pushToken,
-    );
-    const pushTokens = validDevices.map((device) => device.pushToken);
-
-    if (pushTokens.length > 0) {
-      // Send all notifications in a single batch
-      const { tickets, invalidTokens } = await sendPushNotification(
-        pushTokens,
-        'Ride Cancelled ❌',
-        `The ride "${ride.name}" has been cancelled`,
-        `The ride owner has cancelled this ride.`,
-        {
-          notificationType: 'NOTIFICATION__RIDE_CANCELLED',
-          rideId: ride.id,
-          rideName: ride.name,
-          ownerName: req.user.name,
-          startTime: ride.startTime,
-        },
-      );
-
-      // Log results
-      console.log(
-        `Sent ${tickets.length} cancellation notifications, ${invalidTokens.length} invalid tokens`,
-      );
-    }
+    // Send push notifications and save to database
+    await sendAndSaveNotification({
+      userId: participantIds,
+      type: 'NOTIFICATION__RIDE_CANCELLED',
+      title: 'Ride Cancelled ❌',
+      body: `The ride "${ride.name}" has been cancelled`,
+      subtitle: `The ride owner has cancelled this ride.`,
+      data: {
+        notificationType: 'NOTIFICATION__RIDE_CANCELLED',
+        rideId: ride.id,
+        rideName: ride.name,
+        ownerName: req.user.name,
+        startTime: ride.startTime,
+      },
+    });
 
     res.status(200).json({
       success: true,
@@ -2485,44 +2401,22 @@ async function updateRide(req, res) {
         .filter((p) => p.isApproved && p.user.toString() !== userId.toString())
         .map((p) => p.user);
 
-      // Collect all push tokens first
-      const userDevices = await Promise.all(
-        participantIds.map(async (participantId) =>
-          UserDevice.findOne({
-            user: participantId,
-            isActive: true,
-          }).sort({ lastSeen: -1 }),
-        ),
-      );
-
-      // Filter out devices without tokens and collect all valid tokens
-      const validDevices = userDevices.filter(
-        (device) => device && device.pushToken,
-      );
-      const pushTokens = validDevices.map((device) => device.pushToken);
-
-      if (pushTokens.length > 0) {
-        // Send all notifications in a single batch
-        const { tickets, invalidTokens } = await sendPushNotification(
-          pushTokens,
-          'Ride Updated 📝',
-          `The ride "${updatedRide.name}" has been updated`,
-          `The following changes were made: ${changes.join(', ')}`,
-          {
-            notificationType: 'NOTIFICATION__RIDE_UPDATED',
-            rideId: updatedRide.id,
-            rideName: updatedRide.name,
-            ownerName: req.user.name,
-            startTime: updatedRide.startTime,
-            changes,
-          },
-        );
-
-        // Log results
-        console.log(
-          `Sent ${tickets.length} update notifications, ${invalidTokens.length} invalid tokens`,
-        );
-      }
+      // Send push notifications and save to database
+      await sendAndSaveNotification({
+        userId: participantIds,
+        type: 'NOTIFICATION__RIDE_UPDATED',
+        title: 'Ride Updated 📝',
+        body: `The ride "${updatedRide.name}" has been updated`,
+        subtitle: `The following changes were made: ${changes.join(', ')}`,
+        data: {
+          notificationType: 'NOTIFICATION__RIDE_UPDATED',
+          rideId: updatedRide.id,
+          rideName: updatedRide.name,
+          ownerName: req.user.name,
+          startTime: updatedRide.startTime,
+          changes,
+        },
+      });
     }
 
     // Reschedule reminders if startTime changed

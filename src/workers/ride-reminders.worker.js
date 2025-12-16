@@ -12,6 +12,7 @@ import Ride from '../models/ride.js';
 import { User } from '../models/user.js';
 import UserDevice from '../models/user-device.js';
 import { sendPushNotification } from '../utils/expo-push-manager.js';
+import { sendAndSaveNotification } from '../utils/notification-helper.js';
 import { ReminderType } from '../queues/ride-reminders.queue.js';
 
 /**
@@ -29,6 +30,24 @@ function formatTimeframe(reminderType) {
       return '5 minutes';
     default:
       return 'soon';
+  }
+}
+
+/**
+ * Map reminder type to notification type
+ * @param {string} reminderType - Type of reminder (24h, 1h, 5min)
+ * @returns {string} Notification type for database
+ */
+function getNotificationType(reminderType) {
+  switch (reminderType) {
+    case ReminderType.DAY_BEFORE:
+      return 'NOTIFICATION__RIDE_REMINDER_24H';
+    case ReminderType.HOUR_BEFORE:
+      return 'NOTIFICATION__RIDE_REMINDER_1H';
+    case ReminderType.FIVE_MIN_BEFORE:
+      return 'NOTIFICATION__RIDE_REMINDER_5MIN';
+    default:
+      return 'NOTIFICATION__RIDE_REMINDER_24H';
   }
 }
 
@@ -104,56 +123,50 @@ async function processRideReminder(job) {
       return { success: false, reason: 'No active devices' };
     }
 
-    // Group devices by user to send personalized messages
-    const devicesByUser = devices.reduce((acc, device) => {
-      const userId = device.user.toString();
-      if (!acc[userId]) {
-        acc[userId] = [];
+    // Get unique user IDs
+    const userIds = [...new Set(devices.map((d) => d.user.toString()))];
+
+    const notificationType = getNotificationType(reminderType);
+
+    // Send personalized notifications for owner and participants
+    const notificationPromises = userIds.map(async (userId) => {
+      const isOwner = userId === ownerId.toString();
+
+      const title = isOwner
+        ? '🏍️ Your Ride Starts Soon!'
+        : '🏍️ Upcoming Ride!';
+
+      const body = isOwner
+        ? `Your ride "${rideName}" starts in ${timeframe}! Make sure everything is ready.`
+        : `${ownerName}'s ride "${rideName}" starts in ${timeframe}! Get ready to ride.`;
+
+      try {
+        await sendAndSaveNotification({
+          userId,
+          type: notificationType,
+          title,
+          body,
+          subtitle: '',
+          data: {
+            type: 'ride_reminder',
+            rideId,
+            reminderType,
+          },
+        });
+
+        console.log(
+          `[RIDE REMINDER] Sent and saved ${reminderType} reminder to user ${userId}`,
+        );
+
+        return { userId, success: true };
+      } catch (error) {
+        console.error(
+          `[RIDE REMINDER] Failed to send notification to user ${userId}:`,
+          error.message,
+        );
+        return { userId, success: false, error: error.message };
       }
-      acc[userId].push(device.pushToken);
-      return acc;
-    }, {});
-
-    // Send notifications with different messages for owner vs participants
-    const notificationPromises = Object.entries(devicesByUser).map(
-      async ([userId, pushTokens]) => {
-        const isOwner = userId === ownerId.toString();
-
-        const title = isOwner
-          ? '🏍️ Your Ride Starts Soon!'
-          : '🏍️ Upcoming Ride!';
-
-        const body = isOwner
-          ? `Your ride "${rideName}" starts in ${timeframe}! Make sure everything is ready.`
-          : `${ownerName}'s ride "${rideName}" starts in ${timeframe}! Get ready to ride.`;
-
-        try {
-          await sendPushNotification(
-            pushTokens,
-            title,
-            body,
-            '', // subtitle
-            {
-              type: 'ride_reminder',
-              rideId,
-              reminderType,
-            },
-          );
-
-          console.log(
-            `[RIDE REMINDER] Sent ${reminderType} reminder to user ${userId} (${pushTokens.length} device(s))`,
-          );
-
-          return { userId, success: true };
-        } catch (error) {
-          console.error(
-            `[RIDE REMINDER] Failed to send notification to user ${userId}:`,
-            error.message,
-          );
-          return { userId, success: false, error: error.message };
-        }
-      },
-    );
+    });
 
     const results = await Promise.all(notificationPromises);
     const successCount = results.filter((r) => r.success).length;

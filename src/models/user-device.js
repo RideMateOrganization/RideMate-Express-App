@@ -56,6 +56,16 @@ UserDeviceSchema.statics.getPushTokensForUser = function (userId) {
   return this.find({ user: userId, isActive: true }).select('pushToken');
 };
 
+// Static method to get push tokens for multiple users (for batch notifications)
+UserDeviceSchema.statics.getPushTokensForUsers = async function (userIds) {
+  const devices = await this.find({
+    user: { $in: userIds },
+    isActive: true,
+    pushToken: { $exists: true, $ne: null },
+  });
+  return devices.map((d) => d.pushToken);
+};
+
 // Static method to deactivate a device
 UserDeviceSchema.statics.deactivateDevice = function (userId, pushToken) {
   return this.findOneAndUpdate(
