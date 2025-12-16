@@ -1,5 +1,7 @@
 import { webcrypto } from 'node:crypto';
 
+import './lib/instrument.js';
+
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
@@ -8,8 +10,7 @@ import compression from 'compression';
 import { toNodeHandler } from 'better-auth/node';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import * as Sentry from '@sentry/node';
 
 import {
   connectToDatabase,
@@ -29,12 +30,9 @@ if (!globalThis.crypto) {
 }
 
 dotenv.config({ path: './.env', quiet: true });
+
 const env = process.env.NODE_ENV || 'development';
 const PORT = process.env.PORT || 4060;
-
-// Get __dirname equivalent in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -73,15 +71,6 @@ app.all('/api/auth/*splat', toNodeHandler(auth));
 // API routes
 app.use('/api/v1', v1Routes);
 
-// Static pages for OAuth consent screen
-app.get('/privacy', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
-});
-
-app.get('/terms', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'terms.html'));
-});
-
 // Health check endpoint
 app.get('/', (req, res) => {
   res.json({
@@ -106,12 +95,18 @@ app.get('/health', async (req, res) => {
   });
 });
 
+// Debug endpoint - test Sentry error capture
+app.get('/debug-sentry', (req, res, next) => {
+  throw new Error('My first Sentry error!');
+});
+
+// Sentry error handler
+Sentry.setupExpressErrorHandler(app);
+
 // 404 handler
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'Not found',
-  });
+app.use((err, req, res, next) => {
+  res.statusCode = 500;
+  res.end(res.sentry + '\n');
 });
 
 // Global error handler
@@ -123,21 +118,16 @@ app.use((err, req, res, next) => {
   });
 });
 
-let server;
-let workerModule = null; // Store worker module reference for shutdown
-
-// Start server with database connection
+// Start server
 async function startServer() {
   try {
-    // Connect to MongoDB before starting the server
     await connectToDatabase();
     console.log('✅ MongoDB connected successfully');
 
-    // Connect to Redis (optional - won't crash if unavailable)
     try {
       await connectToRedis();
       // Import worker after Redis is connected
-      workerModule = await import('./workers/ride-reminders.worker.js');
+      await import('./workers/ride-reminders.worker.js');
     } catch (error) {
       console.warn(
         '⚠️  Redis connection failed - notification reminders disabled:',
@@ -145,13 +135,8 @@ async function startServer() {
       );
     }
 
-    server = app.listen(PORT, '0.0.0.0', () => {
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`✅ Server running in ${env} mode on port ${PORT}`);
-    });
-
-    server.on('error', (error) => {
-      console.error('Server error:', error);
-      process.exit(1);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
@@ -159,56 +144,21 @@ async function startServer() {
   }
 }
 
-// Graceful shutdown handler
-async function gracefulShutdown(signal) {
-  console.log(`\n${signal} received. Starting graceful shutdown...`);
-
-  // Stop accepting new connections
-  if (server) {
-    server.close(async () => {
-      console.log('HTTP server closed');
-
-      // Close database connection
-      await closeDatabaseConnection();
-      console.log('Database connection closed');
-
-      // Close worker and Redis connection
-      if (workerModule?.shutdownWorker) {
-        await workerModule.shutdownWorker();
-      }
-      await closeRedisConnection();
-
-      console.log('Graceful shutdown completed');
-      process.exit(0);
-    });
-
-    // Force shutdown after 30 seconds
-    setTimeout(() => {
-      console.error('Forced shutdown after timeout');
-      process.exit(1);
-    }, 30000);
-  } else {
-    await closeDatabaseConnection();
-    process.exit(0);
-  }
-}
-
-// Handle shutdown signals
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-// Handle uncaught errors
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
-  gracefulShutdown('UNCAUGHT_EXCEPTION');
+// Handle graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('\nSIGTERM received. Closing database connections...');
+  await closeDatabaseConnection();
+  await closeRedisConnection();
+  console.log('Graceful shutdown completed');
+  process.exit(0);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  gracefulShutdown('UNHANDLED_REJECTION');
+process.on('SIGINT', async () => {
+  console.log('\nSIGINT received. Closing database connections...');
+  await closeDatabaseConnection();
+  await closeRedisConnection();
+  console.log('Graceful shutdown completed');
+  process.exit(0);
 });
 
-// Start the server
 startServer();
-
-export default app;
