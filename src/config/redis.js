@@ -13,10 +13,9 @@
 
 import Redis from 'ioredis';
 import dotenv from 'dotenv';
+import { logInfo, logError, logDebug } from '../utils/logger.js';
 
 dotenv.config({ path: './.env', quiet: true });
-
-const env = process.env.NODE_ENV || 'development';
 
 /**
  * Redis client instance
@@ -31,7 +30,8 @@ let redisClient = null;
 const redisConfig = {
   host: process.env.REDISHOST || process.env.REDIS_HOST || 'localhost',
   port: parseInt(process.env.REDISPORT || process.env.REDIS_PORT || '6379', 10),
-  password: process.env.REDISPASSWORD || process.env.REDIS_PASSWORD || undefined,
+  password:
+    process.env.REDISPASSWORD || process.env.REDIS_PASSWORD || undefined,
   username: process.env.REDISUSER || process.env.REDIS_USER || undefined,
   db: parseInt(process.env.REDIS_DB || '0', 10),
   retryStrategy(times) {
@@ -53,18 +53,19 @@ export async function connectToRedis() {
   }
 
   // Debug: Log environment variables to diagnose Railway issue
-  console.log('🔍 Redis Environment Variables Check:');
-  console.log('  REDIS_URL:', process.env.REDIS_URL ? 'SET' : 'NOT SET');
-  console.log('  REDISHOST:', process.env.REDISHOST || 'NOT SET');
-  console.log('  REDISPORT:', process.env.REDISPORT || 'NOT SET');
-  console.log('  REDISPASSWORD:', process.env.REDISPASSWORD ? 'SET' : 'NOT SET');
-  console.log('  REDISUSER:', process.env.REDISUSER || 'NOT SET');
+  logDebug('🔍 Redis Environment Variables Check:', {
+    REDIS_URL: process.env.REDIS_URL ? 'SET' : 'NOT SET',
+    REDISHOST: process.env.REDISHOST || 'NOT SET',
+    REDISPORT: process.env.REDISPORT || 'NOT SET',
+    REDISPASSWORD: process.env.REDISPASSWORD ? 'SET' : 'NOT SET',
+    REDISUSER: process.env.REDISUSER || 'NOT SET',
+  });
 
   try {
     // Railway provides REDIS_URL and individual variables (REDISHOST, REDISPORT, etc.)
     // Prefer REDIS_URL if available, otherwise use individual variables
     if (process.env.REDIS_URL) {
-      console.log('📦 Redis: Using REDIS_URL for connection');
+      logInfo('📦 Redis: Using REDIS_URL for connection');
       redisClient = new Redis(process.env.REDIS_URL, {
         retryStrategy: redisConfig.retryStrategy,
         maxRetriesPerRequest: redisConfig.maxRetriesPerRequest,
@@ -73,26 +74,27 @@ export async function connectToRedis() {
       });
     } else if (process.env.REDISHOST) {
       // Use Railway's individual variables
-      console.log(`📦 Redis: Using individual config (${redisConfig.host}:${redisConfig.port})`);
+      logInfo(
+        `📦 Redis: Using individual config (${redisConfig.host}:${redisConfig.port})`,
+      );
       redisClient = new Redis(redisConfig);
     } else {
       // Fallback to localhost for local development
-      console.log('📦 Redis: Using localhost (development mode)');
+      logInfo('📦 Redis: Using localhost (development mode)');
       redisClient = new Redis(redisConfig);
     }
 
     // Event handlers
     redisClient.on('connect', () => {
-      console.log('📦 Redis: Connecting...');
+      logInfo('📦 Redis: Connecting...');
     });
 
     redisClient.on('ready', () => {
-      console.log('✅ Redis: Connected and ready');
+      logInfo('✅ Redis: Connected and ready');
     });
 
     redisClient.on('error', (err) => {
-      console.error('❌ Redis Error:', err.message || err);
-      console.error('Redis error details:', {
+      logError('❌ Redis Error:', err, {
         code: err.code,
         syscall: err.syscall,
         address: err.address,
@@ -102,11 +104,11 @@ export async function connectToRedis() {
     });
 
     redisClient.on('close', () => {
-      console.log('📦 Redis: Connection closed');
+      logInfo('📦 Redis: Connection closed');
     });
 
     redisClient.on('reconnecting', () => {
-      console.log('📦 Redis: Reconnecting...');
+      logInfo('📦 Redis: Reconnecting...');
     });
 
     // Explicitly connect and wait for 'ready' event
@@ -128,12 +130,10 @@ export async function connectToRedis() {
       redisClient.connect().catch(reject);
     });
 
-    console.log('✅ Redis connection established successfully');
+    logInfo('✅ Redis connection established successfully');
     return redisClient;
   } catch (error) {
-    console.error('Failed to connect to Redis:', error.message || error);
-    console.error('Redis connection error details:', {
-      error: error.toString(),
+    logError('Failed to connect to Redis:', error, {
       redisUrl: process.env.REDIS_URL ? 'provided (hidden)' : 'not provided',
       redisHost: process.env.REDISHOST || process.env.REDIS_HOST || 'not set',
       redisPort: process.env.REDISPORT || process.env.REDIS_PORT || 'not set',
@@ -162,9 +162,9 @@ export async function closeRedisConnection() {
   if (redisClient) {
     try {
       await redisClient.quit();
-      console.log('✅ Redis connection closed gracefully');
+      logInfo('✅ Redis connection closed gracefully');
     } catch (error) {
-      console.error('Error closing Redis connection:', error.message);
+      logError('Error closing Redis connection:', error);
       // Force disconnect if graceful quit fails
       redisClient.disconnect();
     }
@@ -201,7 +201,7 @@ export async function checkRedisHealth() {
     const result = await redisClient.ping();
     return result === 'PONG';
   } catch (error) {
-    console.error('Redis health check failed:', error.message);
+    logError('Redis health check failed:', error);
     return false;
   }
 }

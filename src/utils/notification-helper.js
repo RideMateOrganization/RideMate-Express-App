@@ -1,4 +1,5 @@
 import Notification from '../models/notification.js';
+import { logInfo, logError } from './logger.js';
 import UserDevice from '../models/user-device.js';
 import { sendPushNotification } from './expo-push-manager.js';
 
@@ -36,7 +37,7 @@ export async function sendAndSaveNotification(params) {
     ),
   );
 
-  console.log(
+  logInfo(
     `[NOTIFICATION] Created ${notifications.length} notification record(s) of type ${type}`,
   );
 
@@ -55,7 +56,7 @@ export async function sendAndSaveNotification(params) {
         data,
       );
 
-      console.log(
+      logInfo(
         `[NOTIFICATION] Sent push notifications to ${pushTokens.length} device(s)`,
       );
 
@@ -65,11 +66,11 @@ export async function sendAndSaveNotification(params) {
         { pushSent: true, pushSentAt: new Date() },
       );
     } catch (error) {
-      console.error('[NOTIFICATION] Error sending push notifications:', error);
+      logError('[NOTIFICATION] Error sending push notifications:', error);
       // Don't throw - notifications are saved in DB even if push fails
     }
   } else {
-    console.log(
+    logInfo(
       '[NOTIFICATION] No active devices found for user(s), skipping push notification',
     );
   }

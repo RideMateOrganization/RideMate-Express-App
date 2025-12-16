@@ -1,4 +1,5 @@
 import Ride from '../models/ride.js';
+import { logWarn } from './logger.js';
 
 /**
  * Generates a unique 6-digit alphanumeric ride code
@@ -26,7 +27,7 @@ async function generateUniqueRideCode() {
       return code;
     }
 
-    console.warn(
+    logWarn(
       `Ride code collision detected: ${code} (attempt ${attempt}/${maxAttempts})`,
     );
   }

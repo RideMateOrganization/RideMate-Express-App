@@ -3,7 +3,10 @@
  *
  * Provides structured logging with different levels.
  * Logs are formatted for Railway's log viewer.
+ * Integrates with Sentry for error tracking.
  */
+
+import * as Sentry from '@sentry/node';
 
 const env = process.env.NODE_ENV || 'development';
 
@@ -53,6 +56,13 @@ export function logError(message, error = {}) {
       : error;
 
   console.error(formatLog(LogLevel.ERROR, message, meta));
+
+  // Send to Sentry
+  if (error instanceof Error) {
+    Sentry.captureException(error, { contexts: { custom: { message, ...meta } } });
+  } else {
+    Sentry.logger.error(message, meta);
+  }
 }
 
 /**
@@ -62,6 +72,7 @@ export function logError(message, error = {}) {
  */
 export function logWarn(message, meta = {}) {
   console.warn(formatLog(LogLevel.WARN, message, meta));
+  Sentry.logger.warn(message, meta);
 }
 
 /**
@@ -71,6 +82,7 @@ export function logWarn(message, meta = {}) {
  */
 export function logInfo(message, meta = {}) {
   console.log(formatLog(LogLevel.INFO, message, meta));
+  Sentry.logger.info(message, meta);
 }
 
 /**

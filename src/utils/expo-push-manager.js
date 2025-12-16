@@ -1,4 +1,5 @@
 import { Expo } from 'expo-server-sdk';
+import { logInfo, logError } from './logger.js';
 
 const expo = new Expo();
 
@@ -28,10 +29,7 @@ const sendPushNotification = async (
   const { messages, invalidTokens } = pushTokens.reduce(
     (acc, pushToken) => {
       if (!Expo.isExpoPushToken(pushToken)) {
-         
-        console.error(
-          `Push token ${pushToken} is not a valid Expo push token.`,
-        );
+        logError(`Push token ${pushToken} is not a valid Expo push token.`);
         acc.invalidTokens.push(pushToken);
         return acc;
       }
@@ -63,12 +61,11 @@ const sendPushNotification = async (
     chunks.map(async (chunk) => {
       try {
         const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
-         
-        console.log('Sent push notification chunk. Tickets:', ticketChunk);
+
+        logInfo('Sent push notification chunk. Tickets:', ticketChunk);
         return ticketChunk;
       } catch (error) {
-         
-        console.error('Error sending push notification chunk:', error);
+        logError('Error sending push notification chunk:', error);
         // Handle transient errors here (e.g., network issues) - the SDK has built-in retries
         // but if an error still propagates, it might need higher-level attention.
         return [];

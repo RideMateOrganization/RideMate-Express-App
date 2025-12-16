@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { logError } from '../utils/logger.js';
 import { getDatabaseUri, getDatabaseName } from './database.js';
 
 let cachedDb = null;
@@ -68,7 +69,7 @@ async function connectDB() {
     cachedDbName = expectedDbName;
     return conn;
   } catch (error) {
-    console.error(`Database connection error: ${error.message}`);
+    logError(`Database connection error: ${error.message}`);
     cachedDb = null;
     cachedDbName = null;
     throw error;
@@ -84,7 +85,7 @@ async function disconnectDB() {
     cachedDb = null;
     cachedDbName = null;
   } catch (error) {
-    console.error(`Error disconnecting: ${error.message}`);
+    logError(`Error disconnecting: ${error.message}`);
   }
 }
 

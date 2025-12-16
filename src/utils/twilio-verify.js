@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import twilio from 'twilio';
+import { logError } from './logger.js';
 
 dotenv.config('../../.env');
 
@@ -18,7 +19,7 @@ async function sendOTP(to, code) {
     });
     return response;
   } catch (error) {
-    console.error('Error sending SMS:', error);
+    logError('Error sending SMS:', error);
     throw error;
   }
 }

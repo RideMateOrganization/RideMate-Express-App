@@ -10,7 +10,13 @@
  * 2. Re-apply cache middleware to route handlers
  */
 
-import { getCache, setCache, generateCacheKey, CacheTTL } from '../utils/cache.js';
+import {
+  getCache,
+  setCache,
+  generateCacheKey,
+  CacheTTL,
+} from '../utils/cache.js';
+import { logInfo, logError } from '../utils/logger.js';
 
 /**
  * Middleware factory for caching GET requests
@@ -54,23 +60,25 @@ export function cacheMiddleware(options = {}) {
 
       if (cached !== null) {
         // Cache hit - return cached response
-        console.log(`✅ Cache HIT: ${cacheKey}`);
+        logInfo(`✅ Cache HIT: ${cacheKey}`);
         return res.json(cached);
       }
 
-      console.log(`❌ Cache MISS: ${cacheKey}`);
+      logInfo(`❌ Cache MISS: ${cacheKey}`);
 
       // Cache miss - intercept res.json to cache the response
       const originalJson = res.json.bind(res);
 
       res.json = function (data) {
         // Only cache successful responses
-        const shouldCacheResponse = shouldCache ? shouldCache(data, res) : res.statusCode === 200;
+        const shouldCacheResponse = shouldCache
+          ? shouldCache(data, res)
+          : res.statusCode === 200;
 
         if (shouldCacheResponse && data) {
           // Cache the response asynchronously (don't wait)
           setCache(cacheKey, data, ttl).catch((err) => {
-            console.error(`Cache set error for key "${cacheKey}":`, err.message);
+            logError(`Cache set error for key "${cacheKey}"`, err);
           });
         }
 
@@ -80,7 +88,7 @@ export function cacheMiddleware(options = {}) {
 
       next();
     } catch (error) {
-      console.error('Cache middleware error:', error.message);
+      logError('Cache middleware error:', error);
       // On error, just continue without caching
       next();
     }
@@ -139,7 +147,14 @@ export function cacheNearbyRides(ttl = CacheTTL.LONG) {
       // Round coordinates to reduce cache key variations
       const lat = parseFloat(latitude).toFixed(4);
       const lng = parseFloat(longitude).toFixed(4);
-      return generateCacheKey('nearby_rides', { userId: req.user?.id, lat, lng, radius, page, limit });
+      return generateCacheKey('nearby_rides', {
+        userId: req.user?.id,
+        lat,
+        lng,
+        radius,
+        page,
+        limit,
+      });
     },
   });
 }
@@ -154,7 +169,14 @@ export function cacheUserExpenses(ttl = CacheTTL.LONG) {
     keyGenerator: (req) => {
       const userId = req.user?.id;
       const { view, month, year, startDate, endDate } = req.query;
-      return generateCacheKey('user_expenses', { userId, view, month, year, startDate, endDate });
+      return generateCacheKey('user_expenses', {
+        userId,
+        view,
+        month,
+        year,
+        startDate,
+        endDate,
+      });
     },
   });
 }
@@ -169,7 +191,14 @@ export function cacheRideExpenses(ttl = CacheTTL.MEDIUM) {
     keyGenerator: (req) => {
       const { rideId } = req.params;
       const { category, sortBy, page, limit } = req.query;
-      return generateCacheKey('ride_expenses', { userId: req.user?.id, rideId, category, sortBy, page, limit });
+      return generateCacheKey('ride_expenses', {
+        userId: req.user?.id,
+        rideId,
+        category,
+        sortBy,
+        page,
+        limit,
+      });
     },
   });
 }
@@ -183,7 +212,10 @@ export function cacheRideExpenseStats(ttl = CacheTTL.LONG) {
     ttl,
     keyGenerator: (req) => {
       const { rideId } = req.params;
-      return generateCacheKey('ride_expense_stats', { userId: req.user?.id, rideId });
+      return generateCacheKey('ride_expense_stats', {
+        userId: req.user?.id,
+        rideId,
+      });
     },
   });
 }
@@ -197,7 +229,10 @@ export function cacheRideParticipants(ttl = CacheTTL.MEDIUM) {
     ttl,
     keyGenerator: (req) => {
       const { rideId } = req.params;
-      return generateCacheKey('ride_participants', { userId: req.user?.id, rideId });
+      return generateCacheKey('ride_participants', {
+        userId: req.user?.id,
+        rideId,
+      });
     },
   });
 }
@@ -212,7 +247,13 @@ export function cacheRideComments(ttl = CacheTTL.MEDIUM) {
     keyGenerator: (req) => {
       const { rideId } = req.params;
       const { parentComment, page, limit } = req.query;
-      return generateCacheKey('ride_comments', { userId: req.user?.id, rideId, parentComment, page, limit });
+      return generateCacheKey('ride_comments', {
+        userId: req.user?.id,
+        rideId,
+        parentComment,
+        page,
+        limit,
+      });
     },
   });
 }

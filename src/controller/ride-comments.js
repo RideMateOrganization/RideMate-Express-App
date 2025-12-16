@@ -1,4 +1,5 @@
 import RideComment from '../models/ride-comments.js';
+import { logError } from '../utils/logger.js';
 import Ride from '../models/ride.js';
 import { User } from '../models/user.js';
 // Redis caching temporarily disabled - will be implemented later
@@ -77,7 +78,7 @@ async function addComment(req, res) {
       data: comment,
     });
   } catch (error) {
-    console.error('Error adding comment:', error);
+    logError('Error adding comment:', error);
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map((err) => err.message);
       return res.status(400).json({
@@ -183,7 +184,7 @@ async function getComments(req, res) {
       },
     });
   } catch (error) {
-    console.error('Error getting comments:', error);
+    logError('Error getting comments:', error);
     if (error.name === 'CastError') {
       return res.status(400).json({
         success: false,
@@ -250,7 +251,7 @@ async function updateComment(req, res) {
       data: comment,
     });
   } catch (error) {
-    console.error('Error updating comment:', error);
+    logError('Error updating comment:', error);
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map((err) => err.message);
       return res.status(400).json({
@@ -312,7 +313,7 @@ async function deleteComment(req, res) {
       message: 'Comment deleted successfully',
     });
   } catch (error) {
-    console.error('Error deleting comment:', error);
+    logError('Error deleting comment:', error);
     if (error.name === 'CastError') {
       return res.status(400).json({
         success: false,
@@ -405,7 +406,7 @@ async function getComment(req, res) {
       },
     });
   } catch (error) {
-    console.error('Error getting comment:', error);
+    logError('Error getting comment:', error);
     if (error.name === 'CastError') {
       return res.status(400).json({
         success: false,
@@ -505,7 +506,7 @@ async function toggleLike(req, res) {
       },
     });
   } catch (error) {
-    console.error('Error toggling like:', error);
+    logError('Error toggling like:', error);
     if (error.name === 'CastError') {
       return res.status(400).json({
         success: false,
@@ -607,7 +608,7 @@ async function getCommentLikes(req, res) {
       },
     });
   } catch (error) {
-    console.error('Error getting comment likes:', error);
+    logError('Error getting comment likes:', error);
     if (error.name === 'CastError') {
       return res.status(400).json({
         success: false,

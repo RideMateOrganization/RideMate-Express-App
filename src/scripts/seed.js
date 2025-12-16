@@ -5,6 +5,7 @@ const UserProfile = require('../models/user');
 const Ride = require('../models/ride');
 const RideRequest = require('../models/ride-requests');
 const { RideVisibility } = require('../utils/constants');
+const { logInfo, logError } = require('../utils/logger.js');
 
 // Sample data generators
 const cities = [
@@ -390,29 +391,29 @@ function generateRideRequestData(rideId, userId, ownerId, forcedStatus = null) {
 // Main seeding function
 async function seedDatabase() {
   try {
-    console.log('🌱 Starting database seeding...');
+    logInfo('🌱 Starting database seeding...');
 
     // Connect to database
     await connectDB();
-    console.log('✅ Connected to database');
+    logInfo('✅ Connected to database');
 
     // Get existing users
     const users = await UserProfile.find({}).select('_id');
     if (users.length === 0) {
-      console.log('❌ No users found in database. Please create users first.');
+      logInfo('❌ No users found in database. Please create users first.');
       return;
     }
 
-    console.log(`📊 Found ${users.length} existing users`);
+    logInfo(`📊 Found ${users.length} existing users`);
 
     // Clear existing data (optional - comment out if you want to keep existing data)
-    console.log('🧹 Clearing existing data...');
+    logInfo('🧹 Clearing existing data...');
     await Ride.deleteMany({});
     await RideRequest.deleteMany({});
-    console.log('✅ Cleared existing data');
+    logInfo('✅ Cleared existing data');
 
     // Generate rides for each user
-    console.log('🚴 Generating rides...');
+    logInfo('🚴 Generating rides...');
     const rides = [];
     await Promise.all(
       users.map(async (user) => {
@@ -425,10 +426,10 @@ async function seedDatabase() {
     );
 
     const createdRides = await Ride.insertMany(rides);
-    console.log(`✅ Created ${createdRides.length} rides`);
+    logInfo(`✅ Created ${createdRides.length} rides`);
 
     // Generate ride requests
-    console.log('📝 Generating ride requests...');
+    logInfo('📝 Generating ride requests...');
     const rideRequests = [];
     createdRides.forEach((ride) => {
       // Skip rides owned by the ride owner and users who are already participants
@@ -472,20 +473,20 @@ async function seedDatabase() {
     });
 
     const createdRequests = await RideRequest.insertMany(rideRequests);
-    console.log(`✅ Created ${createdRequests.length} ride requests`);
+    logInfo(`✅ Created ${createdRequests.length} ride requests`);
 
     // Summary
-    console.log('\n🎉 Database seeding completed successfully!');
-    console.log(`📊 Summary:`);
-    console.log(`   - Users: ${users.length}`);
-    console.log(`   - Rides: ${createdRides.length}`);
-    console.log(`   - Ride Requests: ${createdRequests.length}`);
+    logInfo('\n🎉 Database seeding completed successfully!');
+    logInfo(`📊 Summary:`);
+    logInfo(`   - Users: ${users.length}`);
+    logInfo(`   - Rides: ${createdRides.length}`);
+    logInfo(`   - Ride Requests: ${createdRequests.length}`);
   } catch (error) {
-    console.error('❌ Error during seeding:', error);
+    logError('❌ Error during seeding:', error);
   } finally {
     // Disconnect from database
     await disconnectDB();
-    console.log('🔌 Disconnected from database');
+    logInfo('🔌 Disconnected from database');
   }
 }
 
@@ -493,11 +494,11 @@ async function seedDatabase() {
 if (require.main === module) {
   seedDatabase()
     .then(() => {
-      console.log('✅ Seeding process completed');
+      logInfo('✅ Seeding process completed');
       process.exit(0);
     })
     .catch((error) => {
-      console.error('❌ Seeding process failed:', error);
+      logError('❌ Seeding process failed:', error);
       process.exit(1);
     });
 }

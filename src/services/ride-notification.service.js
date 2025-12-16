@@ -13,6 +13,7 @@ import {
   rescheduleRideReminders,
   ReminderType,
 } from '../queues/ride-reminders.queue.js';
+import { logInfo, logError } from '../utils/logger.js';
 
 /**
  * Schedule all reminder notifications for a ride (24h, 1h, 5min)
@@ -32,7 +33,7 @@ export async function scheduleAllRemindersForRide(
   participantIds,
 ) {
   try {
-    console.log(
+    logInfo(
       `[RIDE NOTIFICATION SERVICE] Scheduling reminders for ride ${rideId}`,
     );
 
@@ -69,14 +70,14 @@ export async function scheduleAllRemindersForRide(
       },
     };
 
-    console.log(
+    logInfo(
       `[RIDE NOTIFICATION SERVICE] Scheduled reminders for ride ${rideId}:`,
       result.scheduled,
     );
 
     return result;
   } catch (error) {
-    console.error(
+    logError(
       `[RIDE NOTIFICATION SERVICE] Failed to schedule reminders for ride ${rideId}:`,
       error.message,
     );
@@ -95,13 +96,13 @@ export async function scheduleAllRemindersForRide(
  */
 export async function cancelAllRemindersForRide(rideId) {
   try {
-    console.log(
+    logInfo(
       `[RIDE NOTIFICATION SERVICE] Cancelling reminders for ride ${rideId}`,
     );
 
     await cancelRideReminders(rideId);
 
-    console.log(
+    logInfo(
       `[RIDE NOTIFICATION SERVICE] ✅ Cancelled all reminders for ride ${rideId}`,
     );
 
@@ -110,7 +111,7 @@ export async function cancelAllRemindersForRide(rideId) {
       message: `Cancelled all reminders for ride ${rideId}`,
     };
   } catch (error) {
-    console.error(
+    logError(
       `[RIDE NOTIFICATION SERVICE] Failed to cancel reminders for ride ${rideId}:`,
       error.message,
     );
@@ -135,7 +136,7 @@ export async function cancelAllRemindersForRide(rideId) {
  */
 export async function rescheduleRemindersForRide(rideId, rideData) {
   try {
-    console.log(
+    logInfo(
       `[RIDE NOTIFICATION SERVICE] Rescheduling reminders for ride ${rideId}`,
     );
 
@@ -150,14 +151,14 @@ export async function rescheduleRemindersForRide(rideId, rideData) {
       },
     };
 
-    console.log(
+    logInfo(
       `[RIDE NOTIFICATION SERVICE] ✅ Rescheduled reminders for ride ${rideId}:`,
       result.rescheduled,
     );
 
     return result;
   } catch (error) {
-    console.error(
+    logError(
       `[RIDE NOTIFICATION SERVICE] Failed to reschedule reminders for ride ${rideId}:`,
       error.message,
     );

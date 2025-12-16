@@ -6,12 +6,12 @@
  */
 
 import { Worker } from 'bullmq';
+import { logInfo, logError } from '../utils/logger.js';
 
 import { getRedisClient } from '../config/redis.js';
 import Ride from '../models/ride.js';
 import { User } from '../models/user.js';
 import UserDevice from '../models/user-device.js';
-import { sendPushNotification } from '../utils/expo-push-manager.js';
 import { sendAndSaveNotification } from '../utils/notification-helper.js';
 import { ReminderType } from '../queues/ride-reminders.queue.js';
 
@@ -58,10 +58,10 @@ function getNotificationType(reminderType) {
 async function processRideReminder(job) {
   const { rideId, reminderType, rideName, ownerId, participantIds } = job.data;
 
-  console.log(
+  logInfo(
     `[RIDE REMINDER] Processing ${reminderType} reminder for ride ${rideId}`,
   );
-  console.log(
+  logInfo(
     `[RIDE REMINDER] DEBUG - ownerId: ${ownerId} (type: ${typeof ownerId}), participantIds: ${JSON.stringify(participantIds)}`,
   );
 
@@ -70,14 +70,14 @@ async function processRideReminder(job) {
     const ride = await Ride.findById(rideId).select('status name owner');
 
     if (!ride) {
-      console.log(
+      logInfo(
         `[RIDE REMINDER] Ride ${rideId} not found - skipping notification`,
       );
       return { success: false, reason: 'Ride not found' };
     }
 
     if (ride.status !== 'planned') {
-      console.log(
+      logInfo(
         `[RIDE REMINDER] Ride ${rideId} status is '${ride.status}' - skipping notification`,
       );
       return { success: false, reason: `Ride status is ${ride.status}` };
@@ -93,7 +93,7 @@ async function processRideReminder(job) {
 
     // Collect all user IDs (owner + participants)
     const allUserIds = [ownerId, ...participantIds];
-    console.log(
+    logInfo(
       `[RIDE REMINDER] DEBUG - Looking for devices for userIds: ${JSON.stringify(allUserIds)}`,
     );
 
@@ -103,21 +103,19 @@ async function processRideReminder(job) {
       isActive: true,
     }).select('user pushToken');
 
-    console.log(
-      `[RIDE REMINDER] DEBUG - Found ${devices.length} active devices`,
-    );
+    logInfo(`[RIDE REMINDER] DEBUG - Found ${devices.length} active devices`);
 
     // Debug: Check all devices for this user regardless of isActive status
     const allDevicesForUser = await UserDevice.find({
       user: { $in: allUserIds },
     }).select('user pushToken isActive');
 
-    console.log(
+    logInfo(
       `[RIDE REMINDER] DEBUG - All devices for user (regardless of isActive): ${JSON.stringify(allDevicesForUser.map((d) => ({ user: d.user.toString(), isActive: d.isActive })))}`,
     );
 
     if (devices.length === 0) {
-      console.log(
+      logInfo(
         `[RIDE REMINDER] No active devices found for ride ${rideId} - skipping`,
       );
       return { success: false, reason: 'No active devices' };
@@ -132,9 +130,7 @@ async function processRideReminder(job) {
     const notificationPromises = userIds.map(async (userId) => {
       const isOwner = userId === ownerId.toString();
 
-      const title = isOwner
-        ? '🏍️ Your Ride Starts Soon!'
-        : '🏍️ Upcoming Ride!';
+      const title = isOwner ? '🏍️ Your Ride Starts Soon!' : '🏍️ Upcoming Ride!';
 
       const body = isOwner
         ? `Your ride "${rideName}" starts in ${timeframe}! Make sure everything is ready.`
@@ -154,13 +150,13 @@ async function processRideReminder(job) {
           },
         });
 
-        console.log(
+        logInfo(
           `[RIDE REMINDER] Sent and saved ${reminderType} reminder to user ${userId}`,
         );
 
         return { userId, success: true };
       } catch (error) {
-        console.error(
+        logError(
           `[RIDE REMINDER] Failed to send notification to user ${userId}:`,
           error.message,
         );
@@ -172,7 +168,7 @@ async function processRideReminder(job) {
     const successCount = results.filter((r) => r.success).length;
     const failCount = results.filter((r) => !r.success).length;
 
-    console.log(
+    logInfo(
       `[RIDE REMINDER] Completed ${reminderType} reminder for ride ${rideId}:`,
       `${successCount} sent, ${failCount} failed`,
     );
@@ -184,7 +180,7 @@ async function processRideReminder(job) {
       results,
     };
   } catch (error) {
-    console.error(
+    logError(
       `[RIDE REMINDER] Error processing ${reminderType} reminder for ride ${rideId}:`,
       error,
     );
@@ -220,24 +216,26 @@ const startWorker = () => {
   });
 
   worker.on('completed', (job, result) => {
-    console.log(
+    logInfo(
       `[RIDE REMINDER WORKER] Job ${job.id} completed:`,
-      result.success ? `✅ ${result.sentCount} notifications sent` : '⚠️ Skipped',
+      result.success
+        ? `✅ ${result.sentCount} notifications sent`
+        : '⚠️ Skipped',
     );
   });
 
   worker.on('failed', (job, err) => {
-    console.error(
+    logError(
       `[RIDE REMINDER WORKER] Job ${job?.id} failed after ${job?.attemptsMade} attempts:`,
       err.message,
     );
   });
 
   worker.on('error', (err) => {
-    console.error('[RIDE REMINDER WORKER] Worker error:', err);
+    logError('[RIDE REMINDER WORKER] Worker error:', err);
   });
 
-  console.log('✅ Ride Reminders Worker started successfully');
+  logInfo('✅ Ride Reminders Worker started successfully');
   return worker;
 };
 
@@ -246,7 +244,7 @@ let workerInstance;
 try {
   workerInstance = startWorker();
 } catch (error) {
-  console.error('❌ Failed to start Ride Reminders Worker:', error.message);
+  logError('❌ Failed to start Ride Reminders Worker:', error.message);
   // Don't crash the app if worker fails to start - Redis might be unavailable
 }
 
@@ -255,15 +253,14 @@ try {
  */
 export async function shutdownWorker() {
   if (workerInstance) {
-    console.log('📦 Shutting down Ride Reminders Worker...');
+    logInfo('📦 Shutting down Ride Reminders Worker...');
     try {
       await workerInstance.close();
-      console.log('✅ Ride Reminders Worker shut down gracefully');
+      logInfo('✅ Ride Reminders Worker shut down gracefully');
     } catch (error) {
-      console.error('Error shutting down worker:', error.message);
+      logError('Error shutting down worker:', error.message);
     }
   }
 }
 
- 
 export default workerInstance;

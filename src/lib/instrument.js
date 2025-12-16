@@ -13,8 +13,14 @@ if (dsn) {
     sendDefaultPii: true,
     tracesSampleRate: 1.0,
     profilesSampleRate: 1.0,
+    integrations: [
+      Sentry.consoleLoggingIntegration({ levels: ['log', 'warn', 'error'] }),
+    ],
+    enableLogs: true,
   });
-  console.log(`✅ Sentry initialized for ${env} environment`);
+  // Use Sentry logger for initialization message
+  Sentry.logger.info(`✅ Sentry initialized for ${env} environment`);
 } else {
+  // Fallback to console.warn for Sentry initialization since logger is not set up yet
   console.warn('⚠️  Sentry DSN not configured - error tracking disabled');
 }

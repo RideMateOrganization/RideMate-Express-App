@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { logError } from '../utils/logger.js';
 import Expense from '../models/expense.js';
 import Ride from '../models/ride.js';
 import { ExpenseCategory } from '../utils/constants.js';
@@ -117,7 +118,7 @@ async function createExpense(req, res) {
       message: 'Expense created successfully',
     });
   } catch (error) {
-    console.error('Error creating expense:', error);
+    logError('Error creating expense:', error);
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map((err) => err.message);
       return res.status(400).json({
@@ -284,7 +285,7 @@ async function updateExpense(req, res) {
       message: 'Expense updated successfully',
     });
   } catch (error) {
-    console.error('Error updating expense:', error);
+    logError('Error updating expense:', error);
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map((err) => err.message);
       return res.status(400).json({
@@ -371,10 +372,18 @@ async function listRideExpenses(req, res) {
       filter.category = category;
     }
 
-    const totalCount = await Expense.countDocuments({ ride: rideId, user: userId });
+    const totalCount = await Expense.countDocuments({
+      ride: rideId,
+      user: userId,
+    });
 
     const totalAmountResult = await Expense.aggregate([
-      { $match: { ride: new mongoose.Types.ObjectId(rideId), user: new mongoose.Types.ObjectId(userId) } },
+      {
+        $match: {
+          ride: new mongoose.Types.ObjectId(rideId),
+          user: new mongoose.Types.ObjectId(userId),
+        },
+      },
       {
         $group: {
           _id: null,
@@ -386,7 +395,12 @@ async function listRideExpenses(req, res) {
       totalAmountResult.length > 0 ? totalAmountResult[0].total : 0;
 
     const categoryBreakdown = await Expense.aggregate([
-      { $match: { ride: new mongoose.Types.ObjectId(rideId), user: new mongoose.Types.ObjectId(userId) } },
+      {
+        $match: {
+          ride: new mongoose.Types.ObjectId(rideId),
+          user: new mongoose.Types.ObjectId(userId),
+        },
+      },
       {
         $group: {
           _id: '$category',
@@ -461,7 +475,7 @@ async function listRideExpenses(req, res) {
       },
     });
   } catch (error) {
-    console.error('Error listing expenses:', error);
+    logError('Error listing expenses:', error);
     res.status(500).json({
       success: false,
       error: {
@@ -565,7 +579,7 @@ async function getExpense(req, res) {
       },
     });
   } catch (error) {
-    console.error('Error getting expense:', error);
+    logError('Error getting expense:', error);
     res.status(500).json({
       success: false,
       error: {
@@ -645,7 +659,7 @@ async function deleteExpense(req, res) {
       message: 'Expense deleted successfully',
     });
   } catch (error) {
-    console.error('Error deleting expense:', error);
+    logError('Error deleting expense:', error);
     res.status(500).json({
       success: false,
       error: {
@@ -921,7 +935,7 @@ async function getUserTotalExpenses(req, res) {
 
     res.status(200).json(response);
   } catch (error) {
-    console.error('Error getting user total expenses:', error);
+    logError('Error getting user total expenses:', error);
     res.status(500).json({
       success: false,
       error: {
@@ -971,7 +985,12 @@ async function getRideExpenseStatistics(req, res) {
     }
 
     const totalAmountResult = await Expense.aggregate([
-      { $match: { ride: new mongoose.Types.ObjectId(rideId), user: new mongoose.Types.ObjectId(userId) } },
+      {
+        $match: {
+          ride: new mongoose.Types.ObjectId(rideId),
+          user: new mongoose.Types.ObjectId(userId),
+        },
+      },
       {
         $group: {
           _id: null,
@@ -983,7 +1002,12 @@ async function getRideExpenseStatistics(req, res) {
       totalAmountResult.length > 0 ? totalAmountResult[0].total : 0;
 
     const categoryResult = await Expense.aggregate([
-      { $match: { ride: new mongoose.Types.ObjectId(rideId), user: new mongoose.Types.ObjectId(userId) } },
+      {
+        $match: {
+          ride: new mongoose.Types.ObjectId(rideId),
+          user: new mongoose.Types.ObjectId(userId),
+        },
+      },
       {
         $group: {
           _id: '$category',
@@ -1024,7 +1048,7 @@ async function getRideExpenseStatistics(req, res) {
       },
     });
   } catch (error) {
-    console.error('Error getting ride expense statistics:', error);
+    logError('Error getting ride expense statistics:', error);
     res.status(500).json({
       success: false,
       error: {

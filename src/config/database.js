@@ -6,6 +6,7 @@
  */
 
 import mongoose from 'mongoose';
+import { logInfo, logError, logWarn } from '../utils/logger.js';
 
 /**
  * Get the current environment (development, staging, or production)
@@ -105,7 +106,7 @@ export async function connectToDatabase() {
   try {
     // Check if already connected
     if (mongoose.connection.readyState === 1) {
-      console.log('MongoDB already connected');
+      logInfo('MongoDB already connected');
       return;
     }
 
@@ -114,22 +115,22 @@ export async function connectToDatabase() {
 
     await mongoose.connect(uri, connectionOptions);
 
-    console.log(`MongoDB connected to database: ${dbName}`);
+    logInfo(`MongoDB connected to database: ${dbName}`);
 
     // Set up connection event handlers
     mongoose.connection.on('error', (error) => {
-      console.error('MongoDB connection error:', error);
+      logError('MongoDB connection error:', error);
     });
 
     mongoose.connection.on('disconnected', () => {
-      console.warn('MongoDB disconnected. Attempting to reconnect...');
+      logWarn('MongoDB disconnected. Attempting to reconnect...');
     });
 
     mongoose.connection.on('reconnected', () => {
-      console.log('MongoDB reconnected successfully');
+      logInfo('MongoDB reconnected successfully');
     });
   } catch (error) {
-    console.error('Failed to connect to MongoDB:', error);
+    logError('Failed to connect to MongoDB:', error);
     throw error;
   }
 }
@@ -142,10 +143,10 @@ export async function closeDatabaseConnection() {
   try {
     if (mongoose.connection.readyState !== 0) {
       await mongoose.connection.close();
-      console.log('MongoDB connection closed');
+      logInfo('MongoDB connection closed');
     }
   } catch (error) {
-    console.error('Error closing MongoDB connection:', error);
+    logError('Error closing MongoDB connection:', error);
     throw error;
   }
 }

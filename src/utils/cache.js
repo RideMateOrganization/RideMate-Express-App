@@ -15,6 +15,7 @@
  */
 
 import { getRedisClient, isRedisAvailable } from '../config/redis.js';
+import { logInfo, logError } from './logger.js';
 
 /**
  * Cache key prefixes for different data types
@@ -93,7 +94,7 @@ export async function getCache(key) {
     // Parse JSON value
     return JSON.parse(value);
   } catch (error) {
-    console.error(`Cache get error for key "${key}":`, error.message);
+    logError(`Cache get error for key "${key}":`, error.message);
     return null;
   }
 }
@@ -118,7 +119,7 @@ export async function setCache(key, value, ttl = CacheTTL.MEDIUM) {
     await redis.setex(key, ttl, serialized);
     return true;
   } catch (error) {
-    console.error(`Cache set error for key "${key}":`, error.message);
+    logError(`Cache set error for key "${key}":`, error.message);
     return false;
   }
 }
@@ -138,7 +139,7 @@ export async function deleteCache(key) {
     await redis.del(key);
     return true;
   } catch (error) {
-    console.error(`Cache delete error for key "${key}":`, error.message);
+    logError(`Cache delete error for key "${key}":`, error.message);
     return false;
   }
 }
@@ -163,10 +164,13 @@ export async function invalidatePattern(pattern) {
 
     // Delete all matching keys
     await redis.del(...keys);
-    console.log(`🗑️  Cache invalidated: ${keys.length} keys matching "${pattern}"`);
+    logInfo(`🗑️  Cache invalidated: ${keys.length} keys matching "${pattern}"`);
     return keys.length;
   } catch (error) {
-    console.error(`Cache invalidation error for pattern "${pattern}":`, error.message);
+    logError(
+      `Cache invalidation error for pattern "${pattern}":`,
+      error.message,
+    );
     return 0;
   }
 }
@@ -206,12 +210,18 @@ export async function invalidateRideCache(rideId) {
  * @returns {Promise<void>}
  */
 export async function invalidateExpensesCache(userId, rideId = null) {
-  const promises = [invalidatePattern(`${CachePrefix.USER_EXPENSES}:*:userId:${userId}:*`)];
+  const promises = [
+    invalidatePattern(`${CachePrefix.USER_EXPENSES}:*:userId:${userId}:*`),
+  ];
 
   if (rideId) {
     promises.push(
-      invalidatePattern(`${CachePrefix.RIDE_EXPENSES}:*:rideId:${rideId}:userId:*`),
-      invalidatePattern(`${CachePrefix.RIDE_EXPENSE_STATS}:rideId:${rideId}:userId:*`)
+      invalidatePattern(
+        `${CachePrefix.RIDE_EXPENSES}:*:rideId:${rideId}:userId:*`,
+      ),
+      invalidatePattern(
+        `${CachePrefix.RIDE_EXPENSE_STATS}:rideId:${rideId}:userId:*`,
+      ),
     );
   }
 
@@ -225,7 +235,9 @@ export async function invalidateExpensesCache(userId, rideId = null) {
  * @returns {Promise<void>}
  */
 export async function invalidateRideRequestsCache(userId, rideId = null) {
-  const promises = [invalidatePattern(`${CachePrefix.PENDING_REQUESTS}:${userId}*`)];
+  const promises = [
+    invalidatePattern(`${CachePrefix.PENDING_REQUESTS}:${userId}*`),
+  ];
 
   if (rideId) {
     promises.push(invalidateRideCache(rideId));
@@ -240,7 +252,9 @@ export async function invalidateRideRequestsCache(userId, rideId = null) {
  * @returns {Promise<void>}
  */
 export async function invalidateCommentsCache(rideId) {
-  await invalidatePattern(`${CachePrefix.RIDE_COMMENTS}:*:rideId:${rideId}:userId:*`);
+  await invalidatePattern(
+    `${CachePrefix.RIDE_COMMENTS}:*:rideId:${rideId}:userId:*`,
+  );
 }
 
 /**
@@ -281,10 +295,10 @@ export async function flushAllCache() {
   try {
     const redis = getRedisClient();
     await redis.flushdb();
-    console.log('🗑️  All cache flushed');
+    logInfo('🗑️  All cache flushed');
     return true;
   } catch (error) {
-    console.error('Cache flush error:', error.message);
+    logError('Cache flush error:', error.message);
     return false;
   }
 }
@@ -311,7 +325,7 @@ export async function getCacheStats() {
       available: true,
     };
   } catch (error) {
-    console.error('Cache stats error:', error.message);
+    logError('Cache stats error:', error.message);
     return null;
   }
 }

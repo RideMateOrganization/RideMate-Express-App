@@ -1,4 +1,5 @@
 import { User, UserProfile } from '../models/user.js';
+import { logInfo, logError } from '../utils/logger.js';
 import LegalAcceptance from '../models/legal-acceptance.js';
 
 // @desc Get current user
@@ -40,7 +41,7 @@ async function getUser(req, res) {
       data: combinedUser,
     });
   } catch (error) {
-    console.error('Error getting user:', error);
+    logError('Error getting user:', error);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -221,7 +222,7 @@ async function acceptTerms(req, res) {
       });
     }
 
-    console.log(req.user.id);
+    logInfo(req.user.id);
     // Check if user exists in Better Auth
     const authUser = await User.findById(req.user.id);
     if (!authUser) {
@@ -283,7 +284,7 @@ async function acceptTerms(req, res) {
         'Terms of service, privacy policy, and data processing consent accepted successfully',
     });
   } catch (error) {
-    console.error('Error accepting terms:', error);
+    logError('Error accepting terms:', error);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -329,7 +330,7 @@ async function getLegalStatus(req, res) {
       data: legalAcceptance.getAcceptanceStatus(),
     });
   } catch (error) {
-    console.error('Error getting legal status:', error);
+    logError('Error getting legal status:', error);
     res.status(500).json({
       success: false,
       error: error.message,

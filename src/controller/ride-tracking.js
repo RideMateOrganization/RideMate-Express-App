@@ -1,4 +1,5 @@
 import RideTracking from '../models/ride-tracking.js';
+import { logInfo, logError } from '../utils/logger.js';
 import Ride from '../models/ride.js';
 
 // @desc Get travelled route for a ride by current user
@@ -19,7 +20,7 @@ async function getTravelledRoute(req, res) {
     }
 
     // Check if user is a participant in the ride
-    console.log('*********');
+    logInfo('*********');
     const isParticipant = ride.participants.some(
       (participant) => participant.user.toString() === userId,
     );
@@ -53,7 +54,7 @@ async function getTravelledRoute(req, res) {
       data: trackingData,
     });
   } catch (err) {
-    console.error('Error getting travelled route:', err);
+    logError('Error getting travelled route:', err);
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -111,7 +112,7 @@ async function getAllTrackingData(req, res) {
       },
     });
   } catch (err) {
-    console.error('Error getting all tracking data:', err);
+    logError('Error getting all tracking data:', err);
     res.status(500).json({
       success: false,
       error: 'Internal server error',

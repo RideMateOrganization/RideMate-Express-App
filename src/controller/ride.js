@@ -1,4 +1,5 @@
 import mongoose, { Types } from 'mongoose';
+import { logInfo, logError } from '../utils/logger.js';
 
 import Ride from '../models/ride.js';
 import generateUniqueRideCode from '../utils/ride-code-generator.js';
@@ -155,18 +156,18 @@ async function createRide(req, res) {
       },
       endLocation: endLocation
         ? {
-          type: 'Point',
-          coordinates: endLocation.coordinates, // Already in [longitude, latitude] format
-          address: {
-            addressLine1: endLocation.address.addressLine1,
-            addressLine2: endLocation.address.addressLine2,
-            city: endLocation.address.city,
-            stateProvince: endLocation.address.stateProvince,
-            country: endLocation.address.country,
-            postalCode: endLocation.address.postalCode,
-            landmark: endLocation.address.landmark,
-          },
-        }
+            type: 'Point',
+            coordinates: endLocation.coordinates, // Already in [longitude, latitude] format
+            address: {
+              addressLine1: endLocation.address.addressLine1,
+              addressLine2: endLocation.address.addressLine2,
+              city: endLocation.address.city,
+              stateProvince: endLocation.address.stateProvince,
+              country: endLocation.address.country,
+              postalCode: endLocation.address.postalCode,
+              landmark: endLocation.address.landmark,
+            },
+          }
         : undefined,
       route,
       maxParticipants: maxParticipants
@@ -177,18 +178,18 @@ async function createRide(req, res) {
       bannerImage,
       waypoints: waypoints
         ? waypoints.map((waypoint) => ({
-          type: 'Point',
-          coordinates: waypoint.coordinates,
-          address: {
-            addressLine1: waypoint.address.addressLine1,
-            addressLine2: waypoint.address.addressLine2,
-            city: waypoint.address.city,
-            stateProvince: waypoint.address.stateProvince,
-            country: waypoint.address.country,
-            postalCode: waypoint.address.postalCode,
-            landmark: waypoint.address.landmark,
-          },
-        }))
+            type: 'Point',
+            coordinates: waypoint.coordinates,
+            address: {
+              addressLine1: waypoint.address.addressLine1,
+              addressLine2: waypoint.address.addressLine2,
+              city: waypoint.address.city,
+              stateProvince: waypoint.address.stateProvince,
+              country: waypoint.address.country,
+              postalCode: waypoint.address.postalCode,
+              landmark: waypoint.address.landmark,
+            },
+          }))
         : undefined,
       status: 'planned',
     });
@@ -198,10 +199,8 @@ async function createRide(req, res) {
 
     // Schedule ride reminder notifications
     try {
-      const participantIds = newRide.participants.map((p) =>
-        p.user.toString(),
-      );
-       
+      const participantIds = newRide.participants.map((p) => p.user.toString());
+
       await scheduleAllRemindersForRide(
         newRide._id.toString(),
         newRide.name,
@@ -210,7 +209,7 @@ async function createRide(req, res) {
         participantIds,
       );
     } catch (error) {
-      console.error('Failed to schedule ride reminders:', error);
+      logError('Failed to schedule ride reminders:', error);
       // Don't fail the request - reminders are non-critical
     }
 
@@ -223,7 +222,7 @@ async function createRide(req, res) {
       data: newRide,
     });
   } catch (error) {
-    console.error(error);
+    logError(error);
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map((err) => err.message);
       return res.status(400).json({
@@ -503,7 +502,7 @@ async function getRides(req, res) {
       },
     });
   } catch (err) {
-    console.error('Error getting rides:', err);
+    logError('Error getting rides:', err);
     res
       .status(500)
       .json({ success: false, error: 'Server Error getting rides.' });
@@ -547,7 +546,7 @@ async function getRide(req, res) {
       data: responseData,
     });
   } catch (err) {
-    console.error('Error getting single ride:', err);
+    logError('Error getting single ride:', err);
     if (err.name === 'CastError') {
       return res
         .status(400)
@@ -702,7 +701,7 @@ async function joinRide(req, res) {
       },
     });
   } catch (err) {
-    console.error('Error joining ride:', err);
+    logError('Error joining ride:', err);
     if (err.name === 'ValidationError') {
       const messages = Object.values(err.errors).map((val) => val.message);
       return res
@@ -773,10 +772,7 @@ async function leaveRide(req, res) {
         participantIds,
       });
     } catch (error) {
-      console.error(
-        'Failed to reschedule reminders after participant left:',
-        error,
-      );
+      logError('Failed to reschedule reminders after participant left:', error);
       // Don't fail the request - reminders are non-critical
     }
 
@@ -785,7 +781,7 @@ async function leaveRide(req, res) {
       data: ride,
     });
   } catch (err) {
-    console.error('Error leaving ride:', err);
+    logError('Error leaving ride:', err);
     res
       .status(500)
       .json({ success: false, error: 'Server Error leaving ride.' });
@@ -846,7 +842,7 @@ async function getPendingRequests(req, res) {
       data: result,
     });
   } catch (err) {
-    console.error('Error getting pending requests:', err);
+    logError('Error getting pending requests:', err);
     res.status(500).json({
       success: false,
       error: 'Server Error getting pending requests.',
@@ -994,7 +990,7 @@ async function approveRejectRequest(req, res) {
           participantIds,
         });
       } catch (error) {
-        console.error(
+        logError(
           'Failed to reschedule reminders after participant join:',
           error,
         );
@@ -1055,7 +1051,7 @@ async function approveRejectRequest(req, res) {
       });
     }
   } catch (err) {
-    console.error('Error approving/rejecting request:', err);
+    logError('Error approving/rejecting request:', err);
 
     // Handle duplicate key error specifically
     if (err.code === 11000) {
@@ -1127,7 +1123,7 @@ async function getMyRequests(req, res) {
       data: categorizedRequests,
     });
   } catch (err) {
-    console.error('Error getting user requests:', err);
+    logError('Error getting user requests:', err);
     res
       .status(500)
       .json({ success: false, error: 'Server Error getting user requests.' });
@@ -1204,7 +1200,7 @@ async function deleteRideRequest(req, res) {
       },
     });
   } catch (err) {
-    console.error('Error deleting ride request:', err);
+    logError('Error deleting ride request:', err);
     if (err.name === 'CastError') {
       return res.status(400).json({
         success: false,
@@ -1263,7 +1259,7 @@ async function getRideParticipants(req, res) {
       maxParticipants: ride.maxParticipants,
       availableSpots: ride.maxParticipants
         ? ride.maxParticipants -
-        ride.participants.filter((p) => p.isApproved).length
+          ride.participants.filter((p) => p.isApproved).length
         : null,
     };
 
@@ -1276,7 +1272,7 @@ async function getRideParticipants(req, res) {
       },
     });
   } catch (err) {
-    console.error('Error getting ride participants:', err);
+    logError('Error getting ride participants:', err);
     if (err.name === 'CastError') {
       return res
         .status(400)
@@ -1374,7 +1370,7 @@ async function removeParticipant(req, res) {
       },
     });
   } catch (err) {
-    console.error('Error removing participant:', err);
+    logError('Error removing participant:', err);
     if (err.name === 'CastError') {
       return res.status(400).json({
         success: false,
@@ -1561,7 +1557,7 @@ async function getNearbyRides(req, res) {
       },
     });
   } catch (err) {
-    console.error('Error getting nearby rides:', err);
+    logError('Error getting nearby rides:', err);
     res.status(500).json({
       success: false,
       error: 'Server Error getting nearby rides',
@@ -1601,17 +1597,17 @@ async function startRide(req, res) {
       });
     }
 
-     // Check if the start time is within acceptable range (allow starting within 5 minutes before scheduled start)
-     const now = new Date();
-     const timeDiff = ride.startTime.getTime() - now.getTime();
-     const EARLY_START_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
-     
-     if (timeDiff > EARLY_START_THRESHOLD_MS) {
-       return res.status(400).json({
-         success: false,
-         error: `Cannot start ride. Ride is scheduled for ${ride.startTime.toLocaleString()}. Please wait until 5 minutes before the scheduled start time.`,
-       });
-     }
+    // Check if the start time is within acceptable range (allow starting within 5 minutes before scheduled start)
+    const now = new Date();
+    const timeDiff = ride.startTime.getTime() - now.getTime();
+    const EARLY_START_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+    if (timeDiff > EARLY_START_THRESHOLD_MS) {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot start ride. Ride is scheduled for ${ride.startTime.toLocaleString()}. Please wait until 5 minutes before the scheduled start time.`,
+      });
+    }
 
     // Update ride status to 'active'
     ride.status = 'active';
@@ -1653,7 +1649,7 @@ async function startRide(req, res) {
       },
     });
   } catch (err) {
-    console.error('Error starting ride:', err);
+    logError('Error starting ride:', err);
     if (err.name === 'CastError') {
       return res.status(400).json({
         success: false,
@@ -1766,7 +1762,7 @@ async function completeRide(req, res) {
       },
     });
   } catch (err) {
-    console.error('Error completing ride:', err);
+    logError('Error completing ride:', err);
     if (err.name === 'CastError') {
       return res.status(400).json({
         success: false,
@@ -1823,9 +1819,9 @@ async function cancelRide(req, res) {
       // eslint-disable-next-line no-underscore-dangle
       await cancelAllRemindersForRide(ride._id.toString());
       // eslint-disable-next-line no-underscore-dangle
-      console.log(`✅ Cancelled all reminders for ride ${ride._id}`);
+      logInfo(`✅ Cancelled all reminders for ride ${ride._id}`);
     } catch (error) {
-      console.error('Failed to cancel ride reminders:', error);
+      logError('Failed to cancel ride reminders:', error);
       // Don't fail the cancellation - reminders will just fire and be ignored
     }
 
@@ -1863,7 +1859,7 @@ async function cancelRide(req, res) {
       },
     });
   } catch (err) {
-    console.error('Error cancelling ride:', err);
+    logError('Error cancelling ride:', err);
     if (err.name === 'CastError') {
       return res.status(400).json({
         success: false,
@@ -2021,7 +2017,7 @@ async function updateLocationTracking(req, res) {
       },
     });
   } catch (err) {
-    console.error('Error updating location tracking:', err);
+    logError('Error updating location tracking:', err);
     if (err.name === 'CastError') {
       return res.status(400).json({
         success: false,
@@ -2114,7 +2110,7 @@ async function getRideTracking(req, res) {
       data: responseData,
     });
   } catch (err) {
-    console.error('Error getting ride tracking data:', err);
+    logError('Error getting ride tracking data:', err);
     if (err.name === 'CastError') {
       return res.status(400).json({
         success: false,
@@ -2294,18 +2290,18 @@ async function updateRide(req, res) {
       },
       endLocation: endLocation
         ? {
-          type: 'Point',
-          coordinates: endLocation.coordinates,
-          address: {
-            addressLine1: endLocation.address.addressLine1,
-            addressLine2: endLocation.address.addressLine2,
-            city: endLocation.address.city,
-            stateProvince: endLocation.address.stateProvince,
-            country: endLocation.address.country,
-            postalCode: endLocation.address.postalCode,
-            landmark: endLocation.address.landmark,
-          },
-        }
+            type: 'Point',
+            coordinates: endLocation.coordinates,
+            address: {
+              addressLine1: endLocation.address.addressLine1,
+              addressLine2: endLocation.address.addressLine2,
+              city: endLocation.address.city,
+              stateProvince: endLocation.address.stateProvince,
+              country: endLocation.address.country,
+              postalCode: endLocation.address.postalCode,
+              landmark: endLocation.address.landmark,
+            },
+          }
         : undefined,
       route,
       maxParticipants: maxParticipants
@@ -2316,18 +2312,18 @@ async function updateRide(req, res) {
       bannerImage,
       waypoints: waypoints
         ? waypoints.map((waypoint) => ({
-          type: 'Point',
-          coordinates: waypoint.coordinates,
-          address: {
-            addressLine1: waypoint.address.addressLine1,
-            addressLine2: waypoint.address.addressLine2,
-            city: waypoint.address.city,
-            stateProvince: waypoint.address.stateProvince,
-            country: waypoint.address.country,
-            postalCode: waypoint.address.postalCode,
-            landmark: waypoint.address.landmark,
-          },
-        }))
+            type: 'Point',
+            coordinates: waypoint.coordinates,
+            address: {
+              addressLine1: waypoint.address.addressLine1,
+              addressLine2: waypoint.address.addressLine2,
+              city: waypoint.address.city,
+              stateProvince: waypoint.address.stateProvince,
+              country: waypoint.address.country,
+              postalCode: waypoint.address.postalCode,
+              landmark: waypoint.address.landmark,
+            },
+          }))
         : undefined,
     };
 
@@ -2433,7 +2429,7 @@ async function updateRide(req, res) {
           participantIds,
         });
       } catch (error) {
-        console.error('Failed to reschedule ride reminders:', error);
+        logError('Failed to reschedule ride reminders:', error);
         // Don't fail the request - reminders are non-critical
       }
     }
@@ -2445,7 +2441,7 @@ async function updateRide(req, res) {
       changes: keyFieldsChanged.length > 0 ? changes : null,
     });
   } catch (err) {
-    console.error('Error updating ride:', err);
+    logError('Error updating ride:', err);
     if (err.name === 'CastError') {
       return res.status(400).json({
         success: false,

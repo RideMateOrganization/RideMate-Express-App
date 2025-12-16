@@ -10,6 +10,7 @@
  */
 
 import { Queue } from 'bullmq';
+import { logInfo, logError } from '../utils/logger.js';
 import { getRedisClient } from '../config/redis.js';
 
 /**
@@ -47,20 +48,20 @@ function getRideRemindersQueue() {
     queueInstance = new Queue('ride-reminders', {
       connection: getQueueConnection(),
       defaultJobOptions: {
-    removeOnComplete: {
-      count: 100, // Keep last 100 completed jobs for debugging
-      age: 24 * 60 * 60, // Keep for 24 hours
-    },
-    removeOnFail: {
-      count: 500, // Keep last 500 failed jobs for debugging
-      age: 7 * 24 * 60 * 60, // Keep for 7 days
-    },
-    attempts: 3, // Retry up to 3 times on failure
-    backoff: {
-      type: 'exponential',
-      delay: 5000, // Start with 5 second delay
-    },
-  },
+        removeOnComplete: {
+          count: 100, // Keep last 100 completed jobs for debugging
+          age: 24 * 60 * 60, // Keep for 24 hours
+        },
+        removeOnFail: {
+          count: 500, // Keep last 500 failed jobs for debugging
+          age: 7 * 24 * 60 * 60, // Keep for 7 days
+        },
+        attempts: 3, // Retry up to 3 times on failure
+        backoff: {
+          type: 'exponential',
+          delay: 5000, // Start with 5 second delay
+        },
+      },
     });
   }
   return queueInstance;
@@ -128,7 +129,7 @@ export async function scheduleRideReminder(data) {
 
   // If the reminder time has already passed, don't schedule
   if (delay <= 0) {
-    console.log(
+    logInfo(
       `⏰ Skipping ${reminderType} reminder for ride ${rideId} - time has passed`,
     );
     return null;
@@ -138,22 +139,18 @@ export async function scheduleRideReminder(data) {
   const jobId = `${rideId}-${reminderType}`;
 
   try {
-    const job = await getRideRemindersQueue().add(
-      'send-reminder',
-      data,
-      {
-        delay,
-        jobId,
-      },
-    );
+    const job = await getRideRemindersQueue().add('send-reminder', data, {
+      delay,
+      jobId,
+    });
 
-    console.log(
+    logInfo(
       `✅ Scheduled ${reminderType} reminder for ride ${rideId} (job: ${job.id}) - will fire in ${Math.round(delay / 1000 / 60)} minutes`,
     );
 
     return job;
   } catch (error) {
-    console.error(
+    logError(
       `❌ Failed to schedule ${reminderType} reminder for ride ${rideId}:`,
       error.message,
     );
@@ -181,18 +178,18 @@ export async function cancelRideReminders(rideId) {
           const job = await getRideRemindersQueue().getJob(jobId);
           if (job) {
             await job.remove();
-            console.log(`✅ Cancelled reminder job: ${jobId}`);
+            logInfo(`✅ Cancelled reminder job: ${jobId}`);
           }
         } catch {
           // Job might not exist, which is fine
-          console.log(`⚠️  Job ${jobId} not found or already removed`);
+          logInfo(`⚠️  Job ${jobId} not found or already removed`);
         }
       }),
     );
 
-    console.log(`✅ Cancelled all reminders for ride ${rideId}`);
+    logInfo(`✅ Cancelled all reminders for ride ${rideId}`);
   } catch (error) {
-    console.error(
+    logError(
       `❌ Failed to cancel reminders for ride ${rideId}:`,
       error.message,
     );

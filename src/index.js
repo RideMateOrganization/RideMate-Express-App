@@ -23,6 +23,7 @@ import {
 } from './config/redis.js';
 import auth from './lib/auth.js';
 import v1Routes from './routes/v1/index.js';
+import { logInfo, logError, logWarn } from './utils/logger.js';
 
 // Polyfill crypto.subtle for Better Auth
 if (!globalThis.crypto) {
@@ -95,23 +96,18 @@ app.get('/health', async (req, res) => {
   });
 });
 
-// Debug endpoint - test Sentry error capture
-app.get('/debug-sentry', (req, res, next) => {
-  throw new Error('My first Sentry error!');
-});
-
 // Sentry error handler
 Sentry.setupExpressErrorHandler(app);
 
 // 404 handler
-app.use((err, req, res, next) => {
+app.use((err, req, res) => {
   res.statusCode = 500;
-  res.end(res.sentry + '\n');
+  res.end(`${res.sentry}\n`);
 });
 
 // Global error handler
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
+app.use((err, req, res) => {
+  logError('Unhandled error:', err);
   res.status(err.status || 500).json({
     success: false,
     error: env === 'production' ? 'Internal server error' : err.message,
@@ -122,42 +118,44 @@ app.use((err, req, res, next) => {
 async function startServer() {
   try {
     await connectToDatabase();
-    console.log('✅ MongoDB connected successfully');
+    logInfo('✅ MongoDB connected successfully');
 
     try {
       await connectToRedis();
       // Import worker after Redis is connected
       await import('./workers/ride-reminders.worker.js');
     } catch (error) {
-      console.warn(
+      logWarn(
         '⚠️  Redis connection failed - notification reminders disabled:',
-        error.message,
+        {
+          error: error.message,
+        },
       );
     }
 
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`✅ Server running in ${env} mode on port ${PORT}`);
+      logInfo(`✅ Server running in ${env} mode on port ${PORT}`);
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logError('Failed to start server:', error);
     process.exit(1);
   }
 }
 
 // Handle graceful shutdown
 process.on('SIGTERM', async () => {
-  console.log('\nSIGTERM received. Closing database connections...');
+  logInfo('\nSIGTERM received. Closing database connections...');
   await closeDatabaseConnection();
   await closeRedisConnection();
-  console.log('Graceful shutdown completed');
+  logInfo('Graceful shutdown completed');
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
-  console.log('\nSIGINT received. Closing database connections...');
+  logInfo('\nSIGINT received. Closing database connections...');
   await closeDatabaseConnection();
   await closeRedisConnection();
-  console.log('Graceful shutdown completed');
+  logInfo('Graceful shutdown completed');
   process.exit(0);
 });
 

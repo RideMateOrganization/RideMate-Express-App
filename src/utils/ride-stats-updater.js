@@ -3,6 +3,7 @@
  */
 
 import Ride from '../models/ride.js';
+import { logError } from './logger.js';
 import RideTracking from '../models/ride-tracking.js';
 import { calculateAggregatedRideStats } from './ride-stats-calculator.js';
 
@@ -33,7 +34,7 @@ async function updateParticipantStats(rideId, userId, stats) {
       await ride.save();
     }
   } catch (err) {
-    console.error('Error updating participant stats:', err);
+    logError('Error updating participant stats:', err);
   }
 }
 
@@ -74,7 +75,7 @@ async function updateRideStats(rideId) {
 
     await ride.save();
   } catch (err) {
-    console.error('Error updating ride stats:', err);
+    logError('Error updating ride stats:', err);
   }
 }
 

@@ -1,10 +1,11 @@
 // controllers/realtimeController.js
 import mongoose from 'mongoose';
+import { logError } from '../utils/logger.js';
 import Ride from '../models/ride.js';
 import RideTracking from '../models/ride-tracking.js';
 import { calculateRideStats } from '../utils/ride-stats-calculator.js';
 
-async function handlePusherWebhook(req, res) {
+export async function handlePusherWebhook(req, res) {
   const webhookData = req.body;
 
   if (
@@ -29,7 +30,7 @@ async function handlePusherWebhook(req, res) {
 
           const channelMatch = channelId.match(/^ride:live-location:(.*)$/);
           if (!channelMatch || !channelMatch[1]) {
-            console.error(
+            logError(
               'Webhook: Invalid channel ID for location update',
               channelId,
             );
@@ -38,7 +39,7 @@ async function handlePusherWebhook(req, res) {
 
           const rideId = channelMatch[1];
           if (!mongoose.Types.ObjectId.isValid(rideId)) {
-            console.error('Webhook: Invalid Ride ID in channel ID', rideId);
+            logError('Webhook: Invalid Ride ID in channel ID', rideId);
             return;
           }
 
@@ -52,12 +53,12 @@ async function handlePusherWebhook(req, res) {
             const userId = message.clientId;
 
             if (!mongoose.Types.ObjectId.isValid(userId)) {
-              console.error('Webhook: Invalid User ID (clientId)', userId);
+              logError('Webhook: Invalid User ID (clientId)', userId);
               return;
             }
 
             if (typeof latitude !== 'number' || typeof longitude !== 'number') {
-              console.error(
+              logError(
                 'Webhook: Invalid coordinates in location update data',
                 coordinates,
               );
@@ -105,7 +106,7 @@ async function handlePusherWebhook(req, res) {
                 },
               );
             } catch (dbError) {
-              console.error(
+              logError(
                 'Database error creating/updating tracking document:',
                 dbError,
               );
@@ -126,7 +127,7 @@ async function handlePusherWebhook(req, res) {
               /^ride:live-location:(.*)$/,
             );
             if (!stopChannelMatch || !stopChannelMatch[1]) {
-              console.error(
+              logError(
                 'Webhook: Invalid channel ID for stop tracking event',
                 channelId,
               );
@@ -135,10 +136,7 @@ async function handlePusherWebhook(req, res) {
             const stopRideId = stopChannelMatch[1];
 
             if (!mongoose.Types.ObjectId.isValid(stopRideId)) {
-              console.error(
-                'Webhook: Invalid Ride ID in channel ID',
-                stopRideId,
-              );
+              logError('Webhook: Invalid Ride ID in channel ID', stopRideId);
               return;
             }
 
@@ -154,7 +152,7 @@ async function handlePusherWebhook(req, res) {
             );
           }
         } catch (parseError) {
-          console.error('Error parsing message data:', parseError);
+          logError('Error parsing message data:', parseError);
         }
       });
     }
@@ -163,4 +161,4 @@ async function handlePusherWebhook(req, res) {
   res.status(200).send('Webhook received and processed');
 }
 
-export { handlePusherWebhook };
+export default handlePusherWebhook;

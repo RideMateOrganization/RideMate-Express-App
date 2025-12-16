@@ -5,6 +5,7 @@ import { expo } from '@better-auth/expo';
 import { phoneNumber } from 'better-auth/plugins';
 
 import dotenv from 'dotenv';
+import { logError } from '../utils/logger.js';
 
 import sendOTP from '../utils/twilio-verify.js';
 import {
@@ -70,7 +71,7 @@ const auth = betterAuth({
               },
             );
           } catch (error) {
-            console.error('Error updating testing OTP in database:', error);
+            logError('Error updating testing OTP in database:', error);
           }
           return Promise.resolve();
         }
@@ -112,7 +113,7 @@ const auth = betterAuth({
 
             await mongoUser.save();
           } catch (error) {
-            console.error('Error creating MongoDB user:', error);
+            logError('Error creating MongoDB user:', error);
           }
         },
       },
