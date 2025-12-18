@@ -38,8 +38,6 @@ import {
   updateComment,
   deleteComment,
   getComment,
-  toggleLike,
-  getCommentLikes,
 } from '../../controller/ride-comments.js';
 
 import {
@@ -79,15 +77,13 @@ router.post('/:id/ping', updateLocationTracking);
 router.route('/:id/images').get(getRideImages).post(uploadRideImage);
 router.delete('/:id/images/:imageId', deleteRideImage);
 
-// Comment routes (caching temporarily disabled)
+// Chat message routes (caching temporarily disabled)
 router.route('/:rideId/comments').get(getComments).post(addComment);
 router
   .route('/:rideId/comments/:commentId')
   .get(getComment)
   .put(updateComment)
   .delete(deleteComment);
-router.post('/:rideId/comments/:commentId/like', toggleLike);
-router.get('/:rideId/comments/:commentId/likes', getCommentLikes);
 
 // Expense routes (caching temporarily disabled)
 router.route('/:rideId/expenses').get(listRideExpenses).post(createExpense);

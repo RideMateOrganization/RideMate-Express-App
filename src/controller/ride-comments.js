@@ -1,24 +1,21 @@
-import RideComment from '../models/ride-comments.js';
+import RideChatMessage from '../models/ride-comments.js';
 import { logError } from '../utils/logger.js';
 import Ride from '../models/ride.js';
-import { User } from '../models/user.js';
-// Redis caching temporarily disabled - will be implemented later
-// import { invalidateCommentsCache } from '../utils/cache.js';
 
-// @desc    Add a comment to a ride
+// @desc    Send a message to ride chat
 // @route   POST /api/v1/rides/:rideId/comments
 // @access  Private
 async function addComment(req, res) {
   try {
     const { rideId } = req.params;
-    const { text, parentComment } = req.body;
+    const { text, image, video, audio, system } = req.body;
     const userId = req.user.id;
 
     // Validate required fields
     if (!text || text.trim().length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'Comment text is required',
+        error: 'Message text is required',
       });
     }
 
@@ -40,45 +37,48 @@ async function addComment(req, res) {
     if (!isOwner && !isParticipant) {
       return res.status(403).json({
         success: false,
-        error: 'Only ride participants can add comments',
+        error: 'Only ride participants can send messages',
       });
     }
 
-    // If parentComment is provided, validate it exists and belongs to the same ride
-    if (parentComment) {
-      const parentCommentDoc = await RideComment.findById(parentComment);
-      if (!parentCommentDoc || parentCommentDoc.ride.toString() !== rideId) {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid parent comment',
-        });
-      }
-    }
-
-    // Create the comment
-    const comment = await RideComment.create({
+    // Create the message in IMessage format
+    const message = await RideChatMessage.create({
       ride: rideId,
-      user: userId,
       text: text.trim(),
-      parentComment: parentComment || null,
+      user: {
+        _id: req.user.id,
+        name: req.user.name || 'Unknown',
+        avatar: req.user.image || null,
+      },
+      image: image || null,
+      video: video || null,
+      audio: audio || null,
+      system: system || false,
+      sent: true,
+      received: false,
+      pending: false,
     });
 
-    // Populate user details
-    await comment.populate({
-      path: 'user',
-      select: 'name email image phoneNumber',
-      populate: { path: 'profile', select: 'handle' },
-    });
-
-    // Redis caching temporarily disabled
-    // await invalidateCommentsCache(rideId);
-
+    // Return the message in IMessage format
     res.status(201).json({
       success: true,
-      data: comment,
+      data: {
+        // eslint-disable-next-line no-underscore-dangle
+        _id: message._id,
+        text: message.text,
+        createdAt: message.createdAt,
+        user: message.user,
+        image: message.image,
+        video: message.video,
+        audio: message.audio,
+        system: message.system,
+        sent: message.sent,
+        received: message.received,
+        pending: message.pending,
+      },
     });
   } catch (error) {
-    logError('Error adding comment:', error);
+    logError('Error sending message:', error);
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map((err) => err.message);
       return res.status(400).json({
@@ -99,13 +99,13 @@ async function addComment(req, res) {
   }
 }
 
-// @desc    Get comments for a ride
+// @desc    Get messages for a ride chat
 // @route   GET /api/v1/rides/:rideId/comments
 // @access  Private
 async function getComments(req, res) {
   try {
     const { rideId } = req.params;
-    const { page = 1, limit = 20, parentComment } = req.query;
+    const { page = 1, limit = 20 } = req.query;
     const userId = req.user.id;
 
     // Check if ride exists
@@ -126,7 +126,7 @@ async function getComments(req, res) {
     if (!isOwner && !isParticipant) {
       return res.status(403).json({
         success: false,
-        error: 'Only ride participants can view comments',
+        error: 'Only ride participants can view messages',
       });
     }
 
@@ -134,45 +134,39 @@ async function getComments(req, res) {
     const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (pageNum - 1) * limitNum;
 
-    // Build filter object
-    const filter = { ride: rideId };
-    if (parentComment === 'null' || parentComment === null) {
-      filter.parentComment = null;
-    } else if (parentComment) {
-      filter.parentComment = parentComment;
-    }
-
     // Get total count for pagination
-    const totalComments = await RideComment.countDocuments(filter);
-    const totalPages = Math.ceil(totalComments / limitNum);
+    const totalMessages = await RideChatMessage.countDocuments({
+      ride: rideId,
+    });
+    const totalPages = Math.ceil(totalMessages / limitNum);
 
-    // Get comments with pagination
-    const comments = await RideComment.find(filter)
-      .populate({
-        path: 'user',
-        select: 'name email image phoneNumber',
-        populate: { path: 'profile', select: 'handle' },
-      })
-      .populate('parentComment')
-      .sort({ createdAt: 1 })
+    // Get messages with pagination (newest first for GiftedChat)
+    const messages = await RideChatMessage.find({ ride: rideId })
+      .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limitNum);
 
-    // Add like status for current user to each comment
-    const commentsWithLikeStatus = comments.map((comment) => {
-      const commentObj = comment.toObject();
-      const isLikedByUser = comment.likes.some(
-        (like) => like.user.toString() === userId.toString(),
-      );
-      commentObj.isLikedByUser = isLikedByUser;
-      return commentObj;
-    });
+    // Transform to IMessage format
+    const formattedMessages = messages.map((msg) => ({
+      // eslint-disable-next-line no-underscore-dangle
+      _id: msg._id,
+      text: msg.text,
+      createdAt: msg.createdAt,
+      user: msg.user,
+      image: msg.image,
+      video: msg.video,
+      audio: msg.audio,
+      system: msg.system,
+      sent: msg.sent,
+      received: msg.received,
+      pending: msg.pending,
+    }));
 
     res.status(200).json({
       success: true,
-      count: commentsWithLikeStatus.length,
-      total: totalComments,
-      data: commentsWithLikeStatus,
+      count: formattedMessages.length,
+      total: totalMessages,
+      data: formattedMessages,
       pagination: {
         currentPage: pageNum,
         totalPages,
@@ -184,7 +178,7 @@ async function getComments(req, res) {
       },
     });
   } catch (error) {
-    logError('Error getting comments:', error);
+    logError('Error getting messages:', error);
     if (error.name === 'CastError') {
       return res.status(400).json({
         success: false,
@@ -198,8 +192,8 @@ async function getComments(req, res) {
   }
 }
 
-// @desc    Update a comment
-// @route   PUT /api/v1/comments/:commentId
+// @desc    Update a message
+// @route   PUT /api/v1/rides/:rideId/comments/:commentId
 // @access  Private
 async function updateComment(req, res) {
   try {
@@ -211,47 +205,51 @@ async function updateComment(req, res) {
     if (!text || text.trim().length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'Comment text is required',
+        error: 'Message text is required',
       });
     }
 
-    // Find the comment
-    const comment = await RideComment.findById(commentId);
-    if (!comment) {
+    // Find the message
+    const message = await RideChatMessage.findById(commentId);
+    if (!message) {
       return res.status(404).json({
         success: false,
-        error: 'Comment not found',
+        error: 'Message not found',
       });
     }
 
-    // Check if user is the author of the comment
-    if (comment.user.toString() !== userId.toString()) {
+    // Check if user is the author of the message
+    // eslint-disable-next-line no-underscore-dangle
+    if (message.user._id !== userId.toString()) {
       return res.status(403).json({
         success: false,
-        error: 'Only the comment author can update the comment',
+        error: 'Only the message author can update the message',
       });
     }
 
-    // Update the comment
-    comment.text = text.trim();
-    await comment.save();
-
-    // Populate user details
-    await comment.populate({
-      path: 'user',
-      select: 'name email image phoneNumber',
-      populate: { path: 'profile', select: 'handle' },
-    });
-
-    // Redis caching temporarily disabled
-    // await invalidateCommentsCache(comment.ride.toString());
+    // Update the message
+    message.text = text.trim();
+    await message.save();
 
     res.status(200).json({
       success: true,
-      data: comment,
+      data: {
+        // eslint-disable-next-line no-underscore-dangle
+        _id: message._id,
+        text: message.text,
+        createdAt: message.createdAt,
+        user: message.user,
+        image: message.image,
+        video: message.video,
+        audio: message.audio,
+        system: message.system,
+        sent: message.sent,
+        received: message.received,
+        pending: message.pending,
+      },
     });
   } catch (error) {
-    logError('Error updating comment:', error);
+    logError('Error updating message:', error);
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map((err) => err.message);
       return res.status(400).json({
@@ -262,7 +260,7 @@ async function updateComment(req, res) {
     if (error.name === 'CastError') {
       return res.status(400).json({
         success: false,
-        error: 'Invalid comment ID format',
+        error: 'Invalid message ID format',
       });
     }
     res.status(500).json({
@@ -272,52 +270,48 @@ async function updateComment(req, res) {
   }
 }
 
-// @desc    Delete a comment
-// @route   DELETE /api/v1/comments/:commentId
+// @desc    Delete a message
+// @route   DELETE /api/v1/rides/:rideId/comments/:commentId
 // @access  Private
 async function deleteComment(req, res) {
   try {
     const { commentId } = req.params;
     const userId = req.user.id;
 
-    // Find the comment
-    const comment = await RideComment.findById(commentId);
-    if (!comment) {
+    // Find the message
+    const message = await RideChatMessage.findById(commentId);
+    if (!message) {
       return res.status(404).json({
         success: false,
-        error: 'Comment not found',
+        error: 'Message not found',
       });
     }
 
-    // Check if user is the author of the comment or the ride owner
-    const ride = await Ride.findById(comment.ride);
-    const isCommentAuthor = comment.user.toString() === userId.toString();
+    // Check if user is the author of the message or the ride owner
+    const ride = await Ride.findById(message.ride);
+    // eslint-disable-next-line no-underscore-dangle
+    const isMessageAuthor = message.user._id === userId.toString();
     const isRideOwner = ride && ride.owner.toString() === userId.toString();
 
-    if (!isCommentAuthor && !isRideOwner) {
+    if (!isMessageAuthor && !isRideOwner) {
       return res.status(403).json({
         success: false,
-        error: 'Only the comment author or ride owner can delete the comment',
+        error: 'Only the message author or ride owner can delete the message',
       });
     }
 
-    // Delete the comment (this will also delete any replies due to cascade)
-    await RideComment.findByIdAndDelete(commentId);
-
-    // Redis caching temporarily disabled
-    // const rideId = comment.ride.toString();
-    // await invalidateCommentsCache(rideId);
+    await RideChatMessage.findByIdAndDelete(commentId);
 
     res.status(200).json({
       success: true,
-      message: 'Comment deleted successfully',
+      message: 'Message deleted successfully',
     });
   } catch (error) {
-    logError('Error deleting comment:', error);
+    logError('Error deleting message:', error);
     if (error.name === 'CastError') {
       return res.status(400).json({
         success: false,
-        error: 'Invalid comment ID format',
+        error: 'Invalid message ID format',
       });
     }
     res.status(500).json({
@@ -327,32 +321,26 @@ async function deleteComment(req, res) {
   }
 }
 
-// @desc    Get a single comment with replies
-// @route   GET /api/v1/comments/:commentId
+// @desc    Get a single message
+// @route   GET /api/v1/rides/:rideId/comments/:commentId
 // @access  Private
 async function getComment(req, res) {
   try {
     const { commentId } = req.params;
     const userId = req.user.id;
 
-    // Find the comment
-    const comment = await RideComment.findById(commentId)
-      .populate({
-        path: 'user',
-        select: 'name email image phoneNumber',
-        populate: { path: 'profile', select: 'handle' },
-      })
-      .populate('parentComment');
+    // Find the message
+    const message = await RideChatMessage.findById(commentId);
 
-    if (!comment) {
+    if (!message) {
       return res.status(404).json({
         success: false,
-        error: 'Comment not found',
+        error: 'Message not found',
       });
     }
 
     // Check if user is a participant or owner of the ride
-    const ride = await Ride.findById(comment.ride);
+    const ride = await Ride.findById(message.ride);
     if (!ride) {
       return res.status(404).json({
         success: false,
@@ -368,49 +356,33 @@ async function getComment(req, res) {
     if (!isOwner && !isParticipant) {
       return res.status(403).json({
         success: false,
-        error: 'Only ride participants can view comments',
+        error: 'Only ride participants can view messages',
       });
     }
-
-    // Get replies to this comment
-    const replies = await RideComment.find({ parentComment: commentId })
-      .populate({
-        path: 'user',
-        select: 'name email image phoneNumber',
-        populate: { path: 'profile', select: 'handle' },
-      })
-      .sort({ createdAt: 1 });
-
-    // Add like status for current user to main comment
-    const commentObj = comment.toObject();
-    const isLikedByUser = comment.likes.some(
-      (like) => like.user.toString() === userId.toString(),
-    );
-    commentObj.isLikedByUser = isLikedByUser;
-
-    // Add like status for current user to replies
-    const repliesWithLikeStatus = replies.map((reply) => {
-      const replyObj = reply.toObject();
-      const isReplyLikedByUser = reply.likes.some(
-        (like) => like.user.toString() === userId.toString(),
-      );
-      replyObj.isLikedByUser = isReplyLikedByUser;
-      return replyObj;
-    });
 
     res.status(200).json({
       success: true,
       data: {
-        ...commentObj,
-        replies: repliesWithLikeStatus,
+        // eslint-disable-next-line no-underscore-dangle
+        _id: message._id,
+        text: message.text,
+        createdAt: message.createdAt,
+        user: message.user,
+        image: message.image,
+        video: message.video,
+        audio: message.audio,
+        system: message.system,
+        sent: message.sent,
+        received: message.received,
+        pending: message.pending,
       },
     });
   } catch (error) {
-    logError('Error getting comment:', error);
+    logError('Error getting message:', error);
     if (error.name === 'CastError') {
       return res.status(400).json({
         success: false,
-        error: 'Invalid comment ID format',
+        error: 'Invalid message ID format',
       });
     }
     res.status(500).json({
@@ -420,214 +392,7 @@ async function getComment(req, res) {
   }
 }
 
-// @desc    Like or unlike a comment
-// @route   POST /api/v1/rides/:rideId/comments/:commentId/like
-// @access  Private
-async function toggleLike(req, res) {
-  try {
-    const { commentId, rideId } = req.params;
-    const userId = req.user.id;
+// Note: Like functionality removed as it's not part of standard chat UX
+// If needed, can be re-added as message reactions
 
-    // Find the comment
-    const comment = await RideComment.findById(commentId);
-    if (!comment) {
-      return res.status(404).json({
-        success: false,
-        error: 'Comment not found',
-      });
-    }
-
-    // Verify the comment belongs to the specified ride
-    if (comment.ride.toString() !== rideId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Comment does not belong to the specified ride',
-      });
-    }
-
-    // Check if user is a participant or owner of the ride
-    const ride = await Ride.findById(rideId);
-    if (!ride) {
-      return res.status(404).json({
-        success: false,
-        error: 'Ride not found',
-      });
-    }
-
-    const isOwner = ride.owner.toString() === userId.toString();
-    const isParticipant = ride.participants.some(
-      (p) => p.user.toString() === userId.toString() && p.isApproved,
-    );
-
-    if (!isOwner && !isParticipant) {
-      return res.status(403).json({
-        success: false,
-        error: 'Only ride participants can like comments',
-      });
-    }
-
-    // Check if user has already liked this comment
-    const existingLikeIndex = comment.likes.findIndex(
-      (like) => like.user.toString() === userId.toString(),
-    );
-
-    let isLiked = false;
-    let { likeCount } = comment;
-
-    if (existingLikeIndex > -1) {
-      // Unlike: remove the like
-      comment.likes.splice(existingLikeIndex, 1);
-      comment.likeCount = Math.max(0, comment.likeCount - 1);
-      likeCount = comment.likeCount;
-    } else {
-      // Like: add the like
-      comment.likes.push({
-        user: userId,
-        likedAt: new Date(),
-      });
-      comment.likeCount += 1;
-      likeCount = comment.likeCount;
-      isLiked = true;
-    }
-
-    await comment.save();
-    // Redis caching temporarily disabled
-    // await invalidateCommentsCache(comment.ride.toString());
-
-    res.status(200).json({
-      success: true,
-      data: {
-        commentId: comment.id,
-        isLiked,
-        likeCount,
-        message: isLiked
-          ? 'Comment liked successfully'
-          : 'Comment unliked successfully',
-      },
-    });
-  } catch (error) {
-    logError('Error toggling like:', error);
-    if (error.name === 'CastError') {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid comment ID format',
-      });
-    }
-    res.status(500).json({
-      success: false,
-      error: 'Internal server error',
-    });
-  }
-}
-
-// @desc    Get users who liked a comment
-// @route   GET /api/v1/rides/:rideId/comments/:commentId/likes
-// @access  Private
-async function getCommentLikes(req, res) {
-  try {
-    const { commentId, rideId } = req.params;
-    const { page = 1, limit = 20 } = req.query;
-    const userId = req.user.id;
-
-    // Find the comment
-    const comment = await RideComment.findById(commentId);
-    if (!comment) {
-      return res.status(404).json({
-        success: false,
-        error: 'Comment not found',
-      });
-    }
-
-    // Verify the comment belongs to the specified ride
-    if (comment.ride.toString() !== rideId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Comment does not belong to the specified ride',
-      });
-    }
-
-    // Check if user is a participant or owner of the ride
-    const ride = await Ride.findById(rideId);
-    if (!ride) {
-      return res.status(404).json({
-        success: false,
-        error: 'Ride not found',
-      });
-    }
-
-    const isOwner = ride.owner.toString() === userId.toString();
-    const isParticipant = ride.participants.some(
-      (p) => p.user.toString() === userId.toString() && p.isApproved,
-    );
-
-    if (!isOwner && !isParticipant) {
-      return res.status(403).json({
-        success: false,
-        error: 'Only ride participants can view comment likes',
-      });
-    }
-
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 20));
-    const skip = (pageNum - 1) * limitNum;
-
-    // Get likes with pagination
-    const likes = comment.likes
-      .sort((a, b) => new Date(b.likedAt) - new Date(a.likedAt))
-      .slice(skip, skip + limitNum);
-
-    // Populate user details for the likes
-    const populatedLikes = await Promise.all(
-      likes.map(async (like) => {
-        const user = await User.findById(like.user)
-          .select('name email image phoneNumber')
-          .populate('profile', 'handle');
-        return {
-          user,
-          likedAt: like.likedAt,
-        };
-      }),
-    );
-
-    const totalLikes = comment.likeCount;
-    const totalPages = Math.ceil(totalLikes / limitNum);
-
-    res.status(200).json({
-      success: true,
-      count: populatedLikes.length,
-      total: totalLikes,
-      data: populatedLikes,
-      pagination: {
-        currentPage: pageNum,
-        totalPages,
-        hasNextPage: pageNum < totalPages,
-        hasPrevPage: pageNum > 1,
-        nextPage: pageNum < totalPages ? pageNum + 1 : null,
-        prevPage: pageNum > 1 ? pageNum - 1 : null,
-        limit: limitNum,
-      },
-    });
-  } catch (error) {
-    logError('Error getting comment likes:', error);
-    if (error.name === 'CastError') {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid comment ID format',
-      });
-    }
-    res.status(500).json({
-      success: false,
-      error: 'Internal server error',
-    });
-  }
-}
-
-export {
-  addComment,
-  getComments,
-  updateComment,
-  deleteComment,
-  getComment,
-  toggleLike,
-  getCommentLikes,
-};
+export { addComment, getComments, updateComment, deleteComment, getComment };
