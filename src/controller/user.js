@@ -88,7 +88,7 @@ async function getUserById(req, res) {
 async function updateUser(req, res) {
   try {
     // Fields that can be updated in Better Auth User model
-    const betterAuthAllowedUpdates = ['name', 'email', 'phone', 'image'];
+    const betterAuthAllowedUpdates = ['name', 'email', 'phoneNumber', 'image'];
 
     // Fields that can be updated in UserProfile model
     const profileAllowedUpdates = [
