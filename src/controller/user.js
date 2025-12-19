@@ -32,7 +32,7 @@ async function getUser(req, res) {
     }
 
     const combinedUser = {
-      ...req.user,
+      ...authUser.toObject(),
       ...userProfile.toObject(),
     };
 
